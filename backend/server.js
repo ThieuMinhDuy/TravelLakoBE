@@ -6,6 +6,14 @@ import connectDB from './config/db.js';
 import cookieParser from 'cookie-parser';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import authRoutes from './routes/customer/authRoutes.js';
+import uploadRoutes from './routes/uploadRoutes.js';
+import adminCityRoutes from './routes/admin/cityRoutes.js';
+import adminPlaceRoutes from './routes/admin/placeRoutes.js';
+import adminUserRoutes from './routes/admin/userRoutes.js';
+import adminReviewRoutes from './routes/admin/reviewRoutes.js';
+import adminDashboardRoutes from './routes/admin/dashboardRoutes.js';
+import swaggerUi from 'swagger-ui-express';
+import swaggerSpec from './docs/swagger.js';
 
 const port = process.env.PORT || 5000;
 
@@ -13,15 +21,29 @@ connectDB();
 
 const app = express();
 
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerSpec);
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/admin/cities', adminCityRoutes);
+app.use('/api/admin/places', adminPlaceRoutes);
+app.use('/api/admin/users', adminUserRoutes);
+app.use('/api/admin/reviews', adminReviewRoutes);
+app.use('/api/admin/dashboard', adminDashboardRoutes);
+
+const __dirname = path.resolve();
+app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
 
 if (process.env.NODE_ENV === 'production') {
-  const __dirname = path.resolve();
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
 
   app.get('*', (req, res) =>
@@ -32,6 +54,8 @@ if (process.env.NODE_ENV === 'production') {
     res.send('API is running....');
   });
 }
+
+
 
 app.use(notFound);
 app.use(errorHandler);

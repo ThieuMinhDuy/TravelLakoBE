@@ -1,0 +1,33 @@
+import swaggerJsdoc from "swagger-jsdoc";
+import swaggerUi from "swagger-ui-express";
+
+const options = {
+    definition: {
+        openapi: "3.0.0",
+        info: {
+            title: "Travel Plan API",
+            version: "1.0.0",
+            description: "API cho website du lịch"
+        },
+        servers: [
+            {
+                url: "http://localhost:5000/api"
+            }
+        ],
+        components: {
+            securitySchemes: {
+                cookieAuth: {
+                    type: "apiKey",
+                    in: "cookie",
+                    name: "jwt"
+                }
+            }
+        }
+    },
+
+    apis: ["./backend/routes/*.js", "./backend/routes/**/*.js"]
+};
+
+const swaggerSpec = swaggerJsdoc(options);
+
+export default swaggerSpec;
