@@ -1,0 +1,1007 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TravelLako - Trình kiểm thử Xác thực & Hồ sơ</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at 50% 50%, #111827 0%, #030712 100%);
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #8b5cf6;
+      --primary-hover: #7c3aed;
+      --accent: #06b6d4;
+      --success: #10b981;
+      --error: #ef4444;
+      --font-title: 'Outfit', sans-serif;
+      --font-body: 'Plus Jakarta Sans', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      font-family: var(--font-body);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      overflow-x: hidden;
+    }
+
+    /* Background decorative blobs */
+    .blob {
+      position: absolute;
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%);
+      border-radius: 50%;
+      z-index: -1;
+      filter: blur(40px);
+    }
+    .blob-1 { top: -10%; left: -10%; }
+    .blob-2 { bottom: -10%; right: -10%; }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-family: var(--font-title);
+      font-size: 2.5rem;
+      font-weight: 700;
+      background: linear-gradient(to right, #8b5cf6, #06b6d4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.05em;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    /* Container Card */
+    .container {
+      width: 100%;
+      max-width: 580px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-radius: 24px;
+      padding: 2.5rem;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      z-index: 10;
+      position: relative;
+    }
+
+    /* Tabs Navigation */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 0.4rem;
+      border-radius: 14px;
+      margin-bottom: 2.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 0.85rem;
+      padding: 0.8rem 0.5rem;
+      cursor: pointer;
+      border-radius: 10px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35);
+    }
+
+    /* Form Styles */
+    .form-pane {
+      display: none;
+    }
+
+    .form-pane.active {
+      display: block;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    h2 {
+      font-family: var(--font-title);
+      font-size: 1.6rem;
+      margin-bottom: 1.5rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      color: var(--text-main);
+      font-family: var(--font-body);
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    /* Flex controls for row items */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    /* Checkbox & Radio styles */
+    .checkbox-group, .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.25rem;
+    }
+
+    .checkbox-item, .radio-item {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 0.6rem 1rem;
+      border-radius: 10px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+    }
+
+    .checkbox-item:hover, .radio-item:hover {
+      background: rgba(255, 255, 255, 0.07);
+    }
+
+    .checkbox-item input, .radio-item input {
+      margin-right: 0.5rem;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    /* Buttons */
+    .btn {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 1rem;
+      font-family: var(--font-body);
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .btn:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text-main);
+      margin-top: 0.75rem;
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .forgot-link-btn {
+      background: none;
+      border: none;
+      color: var(--primary);
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      cursor: pointer;
+      float: right;
+      margin-top: -0.75rem;
+      margin-bottom: 1.5rem;
+      transition: color 0.2s ease;
+    }
+
+    .forgot-link-btn:hover {
+      color: var(--primary-hover);
+      text-decoration: underline;
+    }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-width: 380px;
+    }
+
+    .toast {
+      background: rgba(17, 24, 39, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      border-left: 4px solid var(--primary);
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    .toast.success { border-left-color: var(--success); }
+    .toast.error { border-left-color: var(--error); }
+
+    /* Profile UI Specifics */
+    .profile-header {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .avatar-wrapper {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid var(--primary);
+      background: rgba(255, 255, 255, 0.05);
+      flex-shrink: 0;
+    }
+
+    .avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .profile-title-group h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .profile-title-group p {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 16px;
+      padding: 1.25rem 0.75rem;
+      text-align: center;
+      transition: transform 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-val {
+      font-family: var(--font-title);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 0.25rem;
+    }
+
+    .stat-lbl {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* Divider */
+    .divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+      margin: 2rem 0;
+    }
+
+    .unverified-badge {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--error);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      font-size: 0.75rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <header>
+    <h1>TravelLako</h1>
+    <p>Hệ thống Đăng ký, Xác thực OTP & Quản lý Hồ sơ</p>
+  </header>
+
+  <div class="container">
+    <!-- Tabs Header -->
+    <div class="tabs" id="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('login')">Đăng nhập</button>
+      <button class="tab-btn" onclick="switchTab('register')">Đăng ký</button>
+      <button class="tab-btn" id="verify-tab-btn" onclick="switchTab('verify')">Xác thực OTP</button>
+      <button class="tab-btn" id="profile-tab-btn" style="display: none;" onclick="switchTab('profile')">Hồ sơ</button>
+    </div>
+
+    <!-- 1. Pane Đăng nhập -->
+    <div class="form-pane active" id="pane-login">
+      <h2>🔐 Đăng nhập tài khoản</h2>
+      <form id="form-login" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" class="form-control" placeholder="example@gmail.com" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Mật khẩu</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+        </div>
+        <button type="button" class="forgot-link-btn" onclick="switchTab('forgot')">Quên mật khẩu?</button>
+        <button type="submit" class="btn">Đăng nhập</button>
+      </form>
+    </div>
+
+    <!-- 2. Pane Đăng ký -->
+    <div class="form-pane" id="pane-register">
+      <h2>📝 Đăng ký tài khoản mới</h2>
+      <form id="form-register" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label for="reg-name">Họ và tên</label>
+          <input type="text" id="reg-name" class="form-control" placeholder="Nguyễn Văn A" required>
+        </div>
+        <div class="form-group">
+          <label for="reg-email">Email (chỉ nhận đuôi @gmail.com)</label>
+          <input type="email" id="reg-email" class="form-control" placeholder="example@gmail.com" required>
+        </div>
+        <div class="form-group">
+          <label for="reg-password">Mật khẩu (yếu tố bảo mật mạnh)</label>
+          <input type="password" id="reg-password" class="form-control" placeholder="Tối thiểu 6 ký tự, 1 chữ hoa, 1 chữ thường, 1 số" required>
+        </div>
+        <button type="submit" class="btn">Đăng ký</button>
+      </form>
+    </div>
+
+    <!-- 3. Pane Xác thực OTP -->
+    <div class="form-pane" id="pane-verify">
+      <h2>✉️ Xác thực mã OTP</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Chúng tôi đã gửi mã xác thực gồm 6 chữ số đến email của bạn. Mã sẽ hết hạn sau 5 phút.</p>
+      <form id="form-verify" onsubmit="handleVerifyOTP(event)">
+        <div class="form-group">
+          <label for="verify-email">Email</label>
+          <input type="email" id="verify-email" class="form-control" placeholder="example@gmail.com" required>
+        </div>
+        <div class="form-group">
+          <label for="verify-code">Mã OTP (6 số)</label>
+          <input type="text" id="verify-code" class="form-control" placeholder="123456" maxlength="6" required>
+        </div>
+        <button type="submit" class="btn">Xác thực tài khoản</button>
+        <button type="button" class="btn btn-secondary" onclick="handleResendOTP()">Gửi lại mã OTP</button>
+      </form>
+    </div>
+
+    <!-- 4. Pane Quên mật khẩu -->
+    <div class="form-pane" id="pane-forgot">
+      <h2>🔑 Đặt lại mật khẩu</h2>
+      <!-- Step A: Nhập Email lấy mã -->
+      <div id="forgot-step-email">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Nhập địa chỉ email của bạn để nhận mã OTP khôi phục mật khẩu.</p>
+        <form onsubmit="handleForgotPassword(event)">
+          <div class="form-group">
+            <label for="forgot-email">Email</label>
+            <input type="email" id="forgot-email" class="form-control" placeholder="example@gmail.com" required>
+          </div>
+          <button type="submit" class="btn">Gửi mã OTP đặt lại mật khẩu</button>
+          <button type="button" class="btn btn-secondary" onclick="switchTab('login')">Quay lại đăng nhập</button>
+        </form>
+      </div>
+
+      <!-- Step B: Nhập OTP và Pass mới (mặc định ẩn) -->
+      <div id="forgot-step-reset" style="display: none;">
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">Nhập mã OTP 6 số đã nhận và mật khẩu mới của bạn.</p>
+        <form onsubmit="handleResetPassword(event)">
+          <div class="form-group">
+            <label for="reset-otp-code">Mã OTP</label>
+            <input type="text" id="reset-otp-code" class="form-control" placeholder="123456" maxlength="6" required>
+          </div>
+          <div class="form-group">
+            <label for="reset-new-password">Mật khẩu mới</label>
+            <input type="password" id="reset-new-password" class="form-control" placeholder="Tối thiểu 6 ký tự, 1 chữ hoa, 1 chữ thường, 1 số" required>
+          </div>
+          <button type="submit" class="btn">Xác nhận đổi mật khẩu</button>
+          <button type="button" class="btn btn-secondary" onclick="resetForgotFlow()">Quay lại nhập Email</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- 5. Pane Hồ sơ người dùng -->
+    <div class="form-pane" id="pane-profile">
+      <div class="profile-header">
+        <div class="avatar-wrapper">
+          <img src="" alt="Avatar" id="view-avatar" class="avatar-img">
+        </div>
+        <div class="profile-title-group">
+          <h3 id="view-name">Nguyễn Văn A</h3>
+          <p id="view-email">example@gmail.com</p>
+        </div>
+      </div>
+
+      <!-- Thống kê cá nhân -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="stat-trips">0</div>
+          <div class="stat-lbl">Chuyến đi</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-favorites">0</div>
+          <div class="stat-lbl">Yêu thích</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="stat-reviews">0</div>
+          <div class="stat-lbl">Đánh giá</div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <h2>⚙️ Cập nhật thông tin hồ sơ</h2>
+      <form id="form-profile" onsubmit="handleUpdateProfile(event)">
+        <div class="form-group">
+          <label for="prof-avatar">Đường dẫn ảnh đại diện (URL)</label>
+          <input type="text" id="prof-avatar" class="form-control" placeholder="https://example.com/avatar.png">
+        </div>
+        <div class="form-group">
+          <label for="prof-name">Họ và tên</label>
+          <input type="text" id="prof-name" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label>Email (Khóa bảo mật)</label>
+          <input type="text" id="prof-email" class="form-control" disabled style="opacity: 0.65; cursor: not-allowed;">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="prof-phone">Số điện thoại</label>
+            <input type="text" id="prof-phone" class="form-control" placeholder="098xxxxxxx">
+          </div>
+          <div class="form-group">
+            <label for="prof-gender">Giới tính</label>
+            <select id="prof-gender" class="form-control">
+              <option value="">Chọn giới tính</option>
+              <option value="Nam">Nam</option>
+              <option value="Nữ">Nữ</option>
+              <option value="Khác">Khác</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="prof-dob">Ngày sinh</label>
+          <input type="date" id="prof-dob" class="form-control">
+        </div>
+
+        <div class="form-group">
+          <label>Sở thích du lịch</label>
+          <div class="checkbox-group">
+            <label class="checkbox-item">
+              <input type="checkbox" name="preferences" value="Biển"> Biển
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="preferences" value="Cafe"> Cafe
+            </label>
+            <label class="checkbox-item">
+              <input type="checkbox" name="preferences" value="Ẩm thực"> Ẩm thực
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Ngân sách ưa thích</label>
+          <div class="radio-group">
+            <label class="radio-item">
+              <input type="radio" name="budget" value="Tiết kiệm"> Tiết kiệm
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="budget" value="Trung bình"> Trung bình
+            </label>
+            <label class="radio-item">
+              <input type="radio" name="budget" value="Cao cấp"> Cao cấp
+            </label>
+          </div>
+        </div>
+
+        <button type="submit" class="btn">Lưu cập nhật</button>
+        <button type="button" class="btn btn-secondary" onclick="handleLogout()">Đăng xuất</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- Client-side Logic JS -->
+  <script>
+    // Tab switching
+    function switchTab(tabName) {
+      // Hide all panes
+      const panes = document.querySelectorAll('.form-pane');
+      panes.forEach(pane => pane.classList.remove('active'));
+
+      // Deactivate all tab buttons
+      const buttons = document.querySelectorAll('.tab-btn');
+      buttons.forEach(btn => btn.classList.remove('active'));
+
+      // Show target pane & activate button
+      const targetPane = document.getElementById(`pane-${tabName}`);
+      if (targetPane) {
+        targetPane.classList.add('active');
+      }
+
+      // Find the tab button (if exists) and activate
+      const tabBtn = Array.from(buttons).find(btn => btn.getAttribute('onclick')?.includes(tabName));
+      if (tabBtn) {
+        tabBtn.classList.add('active');
+      }
+    }
+
+    // Toast Notification System
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast ${type}`;
+      
+      const emoji = type === 'success' ? '✅' : '⚠️';
+      toast.innerHTML = `<span>${emoji}</span><span>${message}</span>`;
+      
+      container.appendChild(toast);
+      
+      // Auto remove after 4.5 seconds
+      setTimeout(() => {
+        toast.style.animation = 'slideIn 0.3s reverse forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 4500);
+    }
+
+    // Helper to get authorization token
+    function getToken() {
+      return localStorage.getItem('token');
+    }
+
+    // 1. Handle Registration
+    async function handleRegister(event) {
+      event.preventDefault();
+      const name = document.getElementById('reg-name').value;
+      const email = document.getElementById('reg-email').value;
+      const password = document.getElementById('reg-password').value;
+
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(data.message || 'Đăng ký thành công! Hãy xác thực email.');
+          // Pre-fill email in verify tab and switch
+          document.getElementById('verify-email').value = email;
+          switchTab('verify');
+        } else {
+          showToast(data.message || 'Đăng ký thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 2. Handle OTP Verification
+    async function handleVerifyOTP(event) {
+      event.preventDefault();
+      const email = document.getElementById('verify-email').value;
+      const otp = document.getElementById('verify-code').value;
+
+      try {
+        const res = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast('Xác thực tài khoản thành công!');
+          localStorage.setItem('token', data.token);
+          // Show profile tab button
+          document.getElementById('profile-tab-btn').style.display = 'block';
+          // Hide verify tab button as no longer needed
+          document.getElementById('verify-tab-btn').style.display = 'none';
+          
+          // Switch to profile and load
+          switchTab('profile');
+          loadProfileData(data);
+        } else {
+          showToast(data.message || 'Mã OTP sai hoặc hết hạn.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 3. Handle Resending OTP
+    async function handleResendOTP() {
+      const email = document.getElementById('verify-email').value;
+      if (!email) {
+        showToast('Vui lòng điền Email cần gửi lại OTP!', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/resend-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(data.message || 'Đã gửi lại mã OTP mới!');
+        } else {
+          showToast(data.message || 'Không thể gửi lại mã OTP.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 4. Handle Login
+    async function handleLogin(event) {
+      event.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast('Đăng nhập thành công!');
+          localStorage.setItem('token', data.token);
+          
+          document.getElementById('profile-tab-btn').style.display = 'block';
+          switchTab('profile');
+          // Load profile details via GET profile API (to get complete details + stats)
+          await fetchUserProfile();
+        } else {
+          // Nếu tài khoản chưa xác thực email, cho phép chuyển hướng sang OTP tab luôn
+          if (data.message && data.message.includes('chưa được xác thực')) {
+            showToast(data.message, 'error');
+            document.getElementById('verify-email').value = email;
+            switchTab('verify');
+          } else {
+            showToast(data.message || 'Đăng nhập thất bại.', 'error');
+          }
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 5. Fetch Profile details
+    async function fetchUserProfile() {
+      const token = getToken();
+      try {
+        const res = await fetch('/api/auth/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          loadProfileData(data);
+        } else {
+          showToast('Không thể tải thông tin hồ sơ.', 'error');
+          handleLogout();
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // Populate profile UI
+    function loadProfileData(user) {
+      // Header details
+      document.getElementById('view-name').textContent = user.name;
+      document.getElementById('view-email').textContent = user.email;
+      
+      const defaultAvatar = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&h=150&q=80';
+      document.getElementById('view-avatar').src = user.avatar || defaultAvatar;
+
+      // Stats counts
+      if (user.stats) {
+        document.getElementById('stat-trips').textContent = user.stats.trips || 0;
+        document.getElementById('stat-favorites').textContent = user.stats.favorites || 0;
+        document.getElementById('stat-reviews').textContent = user.stats.reviews || 0;
+      }
+
+      // Populate edit fields
+      document.getElementById('prof-avatar').value = user.avatar || '';
+      document.getElementById('prof-name').value = user.name || '';
+      document.getElementById('prof-email').value = user.email || '';
+      document.getElementById('prof-phone').value = user.phone || '';
+      document.getElementById('prof-gender').value = user.gender || '';
+      
+      if (user.dateOfBirth) {
+        // Format ISO String date to YYYY-MM-DD for date input
+        const dobDate = new Date(user.dateOfBirth);
+        const yyyy = dobDate.getFullYear();
+        const mm = String(dobDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(dobDate.getDate()).padStart(2, '0');
+        document.getElementById('prof-dob').value = `${yyyy}-${mm}-${dd}`;
+      } else {
+        document.getElementById('prof-dob').value = '';
+      }
+
+      // Checkboxes preferences
+      const prefsCheckboxes = document.querySelectorAll('input[name="preferences"]');
+      prefsCheckboxes.forEach(cb => {
+        cb.checked = user.travelPreferences && user.travelPreferences.includes(cb.value);
+      });
+
+      // Radio budget
+      const budgetRadios = document.querySelectorAll('input[name="budget"]');
+      budgetRadios.forEach(radio => {
+        radio.checked = user.favoriteBudget === radio.value;
+      });
+    }
+
+    // 6. Handle Update Profile
+    async function handleUpdateProfile(event) {
+      event.preventDefault();
+      const token = getToken();
+
+      const name = document.getElementById('prof-name').value;
+      const avatar = document.getElementById('prof-avatar').value;
+      const phone = document.getElementById('prof-phone').value;
+      const gender = document.getElementById('prof-gender').value;
+      const dateOfBirth = document.getElementById('prof-dob').value;
+
+      // Collect checked travelPreferences
+      const travelPreferences = [];
+      document.querySelectorAll('input[name="preferences"]:checked').forEach(cb => {
+        travelPreferences.push(cb.value);
+      });
+
+      // Collect selected budget
+      const selectedBudgetRadio = document.querySelector('input[name="budget"]:checked');
+      const favoriteBudget = selectedBudgetRadio ? selectedBudgetRadio.value : '';
+
+      try {
+        const res = await fetch('/api/auth/profile', {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            name,
+            avatar,
+            phone,
+            gender,
+            dateOfBirth,
+            travelPreferences,
+            favoriteBudget
+          })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast('Cập nhật hồ sơ thành công!');
+          // Re-fetch profile to refresh statistics and fields
+          await fetchUserProfile();
+        } else {
+          showToast(data.message || 'Cập nhật thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 7. Forgot Password Flow
+    let tempResetEmail = '';
+
+    async function handleForgotPassword(event) {
+      event.preventDefault();
+      const email = document.getElementById('forgot-email').value;
+
+      try {
+        const res = await fetch('/api/auth/forgot-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(data.message || 'Mã OTP đã được gửi đến email của bạn.');
+          tempResetEmail = email;
+          // Switch to reset password step
+          document.getElementById('forgot-step-email').style.display = 'none';
+          document.getElementById('forgot-step-reset').style.display = 'block';
+        } else {
+          showToast(data.message || 'Yêu cầu thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // Handle Password Reset with OTP
+    async function handleResetPassword(event) {
+      event.preventDefault();
+      const otp = document.getElementById('reset-otp-code').value;
+      const newPassword = document.getElementById('reset-new-password').value;
+
+      try {
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: tempResetEmail, otp, newPassword })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast('Đặt lại mật khẩu thành công! Hãy đăng nhập.');
+          resetForgotFlow();
+          switchTab('login');
+          // Pre-fill email in login tab
+          document.getElementById('login-email').value = tempResetEmail;
+        } else {
+          showToast(data.message || 'Mã OTP sai hoặc mật khẩu không đủ mạnh.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    function resetForgotFlow() {
+      document.getElementById('forgot-step-email').style.display = 'block';
+      document.getElementById('forgot-step-reset').style.display = 'none';
+      document.getElementById('reset-otp-code').value = '';
+      document.getElementById('reset-new-password').value = '';
+    }
+
+    // 8. Logout
+    function handleLogout() {
+      localStorage.removeItem('token');
+      showToast('Đã đăng xuất khỏi hệ thống.');
+      
+      document.getElementById('profile-tab-btn').style.display = 'none';
+      document.getElementById('verify-tab-btn').style.display = 'block';
+      
+      // Clear forms
+      document.getElementById('form-login').reset();
+      document.getElementById('form-register').reset();
+      document.getElementById('form-verify').reset();
+      
+      switchTab('login');
+    }
+
+    // Page Load check: If already logged in, show profile tab button & load profile
+    window.onload = () => {
+      const token = getToken();
+      if (token) {
+        document.getElementById('profile-tab-btn').style.display = 'block';
+        switchTab('profile');
+        fetchUserProfile();
+      }
+    };
+  </script>
+</body>
+</html>

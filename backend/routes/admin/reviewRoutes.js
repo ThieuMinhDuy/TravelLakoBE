@@ -14,6 +14,25 @@ router.use(protect, admin);
  *     tags: [Admin - Review]
  *     security:
  *       - cookieAuth: []
+ *     parameters:
+*       - in: query
+*         name: city
+*         schema:
+*           type: string
+*         description: Lọc đánh giá theo ID thành phố
+*
+*       - in: query
+*         name: itemType
+*         schema:
+*           type: string
+*           enum: [Attraction, Hotel, Restaurant, Cafe]
+*         description: Lọc đánh giá theo loại địa điểm
+*
+*       - in: query
+*         name: itemId
+*         schema:
+*           type: string
+*         description: Lọc đánh giá theo ID địa điểm cụ thể
  *     responses:
  *       200:
  *         description: Danh sách đánh giá kèm thông tin người dùng và địa điểm tương ứng

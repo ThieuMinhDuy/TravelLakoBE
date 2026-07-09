@@ -20,6 +20,43 @@ const userSchema = mongoose.Schema(
       type: String,
       default: '',
     },
+    phone: {
+      type: String,
+      default: '',
+    },
+    gender: {
+      type: String,
+      enum: ['Nam', 'Nữ', 'Khác', ''],
+      default: '',
+    },
+    dateOfBirth: {
+      type: Date,
+      default: null,
+    },
+    travelPreferences: {
+      type: [String],
+      default: [],
+    },
+    favoriteBudget: {
+      type: String,
+      enum: ['Tiết kiệm', 'Trung bình', 'Cao cấp', ''],
+      default: '',
+    },
+    isVerified: {
+      type: Boolean,
+      required: true,
+      default: false,
+    },
+    otp: {
+      code: {
+        type: String,
+        default: null,
+      },
+      expiresAt: {
+        type: Date,
+        default: null,
+      },
+    },
     isAdmin: {
       type: Boolean,
       required: true,

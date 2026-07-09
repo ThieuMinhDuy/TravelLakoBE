@@ -41,7 +41,14 @@ app.use('/api/admin/reviews', adminReviewRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 
 const __dirname = path.resolve();
+const isRunningInBackend = __dirname.endsWith('backend') || __dirname.endsWith('backend\\') || __dirname.endsWith('backend/');
+
+const publicPath = isRunningInBackend 
+  ? path.join(__dirname, 'public') 
+  : path.join(__dirname, 'backend', 'public');
+
 app.use('/uploads', express.static(path.join(__dirname, '/uploads')));
+app.use(express.static(publicPath));
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '/frontend/dist')));
@@ -49,10 +56,6 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) =>
     res.sendFile(path.resolve(__dirname, 'frontend', 'dist', 'index.html'))
   );
-} else {
-  app.get('/', (req, res) => {
-    res.send('API is running....');
-  });
 }
 
 
