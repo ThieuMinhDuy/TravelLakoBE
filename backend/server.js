@@ -6,6 +6,8 @@ import connectDB from './config/db.js';
 import cookieParser from 'cookie-parser';
 import { notFound, errorHandler } from './middleware/errorMiddleware.js';
 import authRoutes from './routes/customer/authRoutes.js';
+import customerCityRoutes from './routes/customer/cityRoutes.js';
+import customerPlaceRoutes from './routes/customer/placeRoutes.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import adminCityRoutes from './routes/admin/cityRoutes.js';
 import adminPlaceRoutes from './routes/admin/placeRoutes.js';
@@ -34,6 +36,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/cities', customerCityRoutes);
+app.use('/api/places', customerPlaceRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/admin/cities', adminCityRoutes);
 app.use('/api/admin/places', adminPlaceRoutes);
