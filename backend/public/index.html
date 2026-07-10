@@ -428,6 +428,7 @@
       <button class="tab-btn" onclick="switchTab('register')">Đăng ký</button>
       <button class="tab-btn" id="verify-tab-btn" onclick="switchTab('verify')">Xác thực OTP</button>
       <button class="tab-btn" id="profile-tab-btn" style="display: none;" onclick="switchTab('profile')">Hồ sơ</button>
+      <button class="tab-btn" id="admin-tab-btn" style="display: none;" onclick="switchTab('admin')">Import Dữ Liệu</button>
     </div>
 
     <!-- 1. Pane Đăng nhập -->
@@ -617,6 +618,39 @@
         <button type="button" class="btn btn-secondary" onclick="handleLogout()">Đăng xuất</button>
       </form>
     </div>
+
+    <!-- 6. Pane Admin Import Tool -->
+    <div class="form-pane" id="pane-admin">
+      <h2>🛠️ Admin Bulk Import Tool (OSM)</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Nhập tên một thành phố bất kỳ của Việt Nam. Hệ thống sẽ tự động định vị tọa độ, khởi tạo thành phố và cào dữ liệu từ bản đồ OpenStreetMap.
+      </p>
+      <form id="form-import" onsubmit="handleImportOSM(event)">
+        <!-- Ô nhập chữ thành phố với gợi ý tự động -->
+        <div class="form-group">
+          <label for="import-city-name">Tên thành phố cần Import (Ví dụ: Huế, Phú Quốc, Sapa...)</label>
+          <input type="text" id="import-city-name" list="city-suggestions" class="form-control" placeholder="Nhập tên thành phố..." required autocomplete="off">
+          <datalist id="city-suggestions"></datalist>
+        </div>
+
+        <div class="form-group">
+          <label for="import-limit">Giới hạn địa điểm mỗi loại (Khách sạn, Cafe...)</label>
+          <input type="number" id="import-limit" class="form-control" value="20" min="1" max="100" required>
+        </div>
+        <button type="submit" class="btn" id="btn-submit-import">Bắt đầu Import</button>
+      </form>
+
+      <div id="import-result-card" style="display: none; margin-top: 1.5rem; padding: 1.25rem; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px;">
+        <h3 style="font-size: 1.1rem; color: var(--accent); margin-bottom: 0.75rem;">📊 Kết quả Import:</h3>
+        <ul style="list-style-type: none; font-size: 0.9rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.4rem;">
+          <li id="res-hotels">🏨 Khách sạn: 0</li>
+          <li id="res-attractions">🏛️ Điểm du lịch: 0</li>
+          <li id="res-restaurants">🍲 Nhà hàng: 0</li>
+          <li id="res-cafes">☕ Quán cafe: 0</li>
+          <li id="res-total" style="font-weight: bold; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 0.4rem;">✨ Tổng cộng: 0</li>
+        </ul>
+      </div>
+    </div>
   </div>
 
   <!-- Toast Notification Container -->
@@ -644,6 +678,10 @@
       const tabBtn = Array.from(buttons).find(btn => btn.getAttribute('onclick')?.includes(tabName));
       if (tabBtn) {
         tabBtn.classList.add('active');
+      }
+
+      if (tabName === 'admin') {
+        loadVietnamCitiesList();
       }
     }
 
@@ -859,6 +897,13 @@
       budgetRadios.forEach(radio => {
         radio.checked = user.favoriteBudget === radio.value;
       });
+
+      // Show admin tab if admin user
+      if (user.isAdmin) {
+        document.getElementById('admin-tab-btn').style.display = 'block';
+      } else {
+        document.getElementById('admin-tab-btn').style.display = 'none';
+      }
     }
 
     // 6. Handle Update Profile
@@ -983,6 +1028,7 @@
       showToast('Đã đăng xuất khỏi hệ thống.');
       
       document.getElementById('profile-tab-btn').style.display = 'none';
+      document.getElementById('admin-tab-btn').style.display = 'none';
       document.getElementById('verify-tab-btn').style.display = 'block';
       
       // Clear forms
@@ -993,6 +1039,99 @@
       switchTab('login');
     }
 
+    let vietnamCitiesCached = [];
+
+    async function loadVietnamCitiesList() {
+      if (vietnamCitiesCached.length > 0) return;
+      const token = getToken();
+      try {
+        const res = await fetch('/api/admin/import/vietnam-cities', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          vietnamCitiesCached = await res.json();
+        }
+      } catch (err) {
+        console.error('Error loading vietnam cities list:', err);
+      }
+    }
+
+    function removeTones(str) {
+      return str
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+    }
+
+    function showCitySuggestions(query) {
+      const datalist = document.getElementById('city-suggestions');
+      datalist.innerHTML = '';
+      
+      const cleanQuery = removeTones(query.toLowerCase());
+      
+      const matches = vietnamCitiesCached.filter(city => {
+        const cleanCity = removeTones(city.toLowerCase());
+        return cleanCity.includes(cleanQuery);
+      });
+
+      // Hiển thị tối đa 8 gợi ý phù hợp
+      matches.slice(0, 8).forEach(city => {
+        const option = document.createElement('option');
+        option.value = city;
+        datalist.appendChild(option);
+      });
+    }
+
+    async function handleImportOSM(event) {
+      event.preventDefault();
+      const token = getToken();
+      
+      const cityName = document.getElementById('import-city-name').value.trim();
+      if (!cityName) {
+        showToast('Vui lòng nhập tên thành phố!', 'error');
+        return;
+      }
+      
+      const limit = document.getElementById('import-limit').value;
+      const btnSubmit = document.getElementById('btn-submit-import');
+      const originalText = btnSubmit.textContent;
+      
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = '⏳ Đang import dữ liệu... (khoảng 5-10s)';
+      document.getElementById('import-result-card').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/admin/import/osm', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ cityName, limit: parseInt(limit) })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(data.message || 'Import dữ liệu thành công!');
+          
+          document.getElementById('import-result-card').style.display = 'block';
+          document.getElementById('res-hotels').textContent = `🏨 Khách sạn: +${data.stats.hotelsImported}`;
+          document.getElementById('res-attractions').textContent = `🏛️ Điểm du lịch: +${data.stats.attractionsImported}`;
+          document.getElementById('res-restaurants').textContent = `🍲 Nhà hàng: +${data.stats.restaurantsImported}`;
+          document.getElementById('res-cafes').textContent = `☕ Quán cafe: +${data.stats.cafesImported}`;
+          document.getElementById('res-total').textContent = `✨ Tổng cộng: ${data.stats.totalImported} địa điểm mới`;
+        } else {
+          showToast(data.message || 'Import thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ hoặc máy chủ OSM bận.', 'error');
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = originalText;
+      }
+    }
+
     // Page Load check: If already logged in, show profile tab button & load profile
     window.onload = () => {
       const token = getToken();
@@ -1000,6 +1139,19 @@
         document.getElementById('profile-tab-btn').style.display = 'block';
         switchTab('profile');
         fetchUserProfile();
+      }
+
+      // Đăng ký bộ lắng nghe gợi ý tự động cho ô nhập tên thành phố
+      const cityInput = document.getElementById('import-city-name');
+      if (cityInput) {
+        cityInput.addEventListener('input', (e) => {
+          const query = e.target.value.trim();
+          if (query.length < 1) {
+            document.getElementById('city-suggestions').innerHTML = '';
+            return;
+          }
+          showCitySuggestions(query);
+        });
       }
     };
   </script>

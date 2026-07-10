@@ -15,17 +15,23 @@ const protect = asyncHandler(async (req, res, next) => {
   }
 
   if (token) {
+    let decoded;
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-      req.user = await User.findById(decoded.userId).select('-password');
-
-      next();
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       console.error(error);
       res.status(401);
       throw new Error('Not authorized, token failed');
     }
+
+    req.user = await User.findById(decoded.userId).select('-password');
+
+    if (req.user && req.user.isBlocked) {
+      res.status(403);
+      throw new Error('Tài khoản của bạn đã bị khóa!');
+    }
+
+    next();
   } else {
     res.status(401);
     throw new Error('Not authorized, no token');

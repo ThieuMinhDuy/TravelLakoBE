@@ -51,12 +51,14 @@ const importData = async () => {
         email: 'admin@travel.com',
         password: hashedAdminPassword,
         isAdmin: true,
+        isVerified: true,
       },
       {
         name: 'Regular Customer',
         email: 'customer@travel.com',
         password: hashedUserPassword,
         isAdmin: false,
+        isVerified: true,
       },
     ]);
 

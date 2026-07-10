@@ -61,7 +61,10 @@ const getReviews = asyncHandler(async (req, res) => {
       select: 'name address images city',
     });
 
-  res.json(reviews);
+  res.json({
+    total: reviews.length,
+    reviews
+  });
 });
 
 // @desc    Delete a review
@@ -71,7 +74,29 @@ const deleteReview = asyncHandler(async (req, res) => {
   const review = await Review.findById(req.params.id);
 
   if (review) {
+    const { itemId, itemType } = review;
+
+    // Xóa review khỏi DB
     await Review.deleteOne({ _id: req.params.id });
+
+    // Tính toán lại rating trung bình và số lượng review cho địa điểm này
+    const remainingReviews = await Review.find({ itemId });
+    const numReviews = remainingReviews.length;
+    const rating = numReviews > 0
+      ? parseFloat((remainingReviews.reduce((acc, item) => acc + item.rating, 0) / numReviews).toFixed(1))
+      : 0;
+
+    // Xác định model tương ứng
+    let Model;
+    if (itemType === 'Attraction') Model = Attraction;
+    else if (itemType === 'Hotel') Model = Hotel;
+    else if (itemType === 'Restaurant') Model = Restaurant;
+    else if (itemType === 'Cafe') Model = Cafe;
+
+    if (Model) {
+      await Model.findByIdAndUpdate(itemId, { rating, numReviews });
+    }
+
     res.json({ message: 'Review removed successfully' });
   } else {
     res.status(404);

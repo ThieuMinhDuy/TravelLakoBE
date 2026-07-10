@@ -12,6 +12,7 @@ import adminPlaceRoutes from './routes/admin/placeRoutes.js';
 import adminUserRoutes from './routes/admin/userRoutes.js';
 import adminReviewRoutes from './routes/admin/reviewRoutes.js';
 import adminDashboardRoutes from './routes/admin/dashboardRoutes.js';
+import adminImportRoutes from './routes/admin/importRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
 
@@ -39,6 +40,7 @@ app.use('/api/admin/places', adminPlaceRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/reviews', adminReviewRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
+app.use('/api/admin/import', adminImportRoutes);
 
 const __dirname = path.resolve();
 const isRunningInBackend = __dirname.endsWith('backend') || __dirname.endsWith('backend\\') || __dirname.endsWith('backend/');

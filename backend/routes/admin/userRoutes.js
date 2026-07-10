@@ -63,7 +63,7 @@ router.use(protect, admin);
  *         description: Không tìm thấy người dùng
  * 
  *   put:
- *     summary: Cập nhật thông tin/trạng thái người dùng (Admin)
+ *     summary: Khóa/Mở khóa tài khoản người dùng (Admin)
  *     tags: [Admin - User]
  *     security:
  *       - cookieAuth: []

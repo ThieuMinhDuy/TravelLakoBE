@@ -14,6 +14,12 @@ const authUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
 
   if (user && (await user.matchPassword(password))) {
+    // Chặn đăng nhập nếu tài khoản bị khóa
+    if (user.isBlocked) {
+      res.status(403);
+      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!');
+    }
+
     // Chặn đăng nhập nếu chưa xác thực email
     if (!user.isVerified) {
       res.status(400);

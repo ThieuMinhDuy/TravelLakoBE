@@ -8,7 +8,9 @@
     "start": "node server.js",
     "server": "nodemon server.js",
     "client": "npm run dev --prefix ../frontend",
-    "dev": "concurrently \"npm run server\" \"npm run client\""
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "seed": "node seeder.js",
+    "seed:vietnam": "node scripts/seedVietnam.js"
   },
   "author": "Brad Traversy",
   "license": "MIT",

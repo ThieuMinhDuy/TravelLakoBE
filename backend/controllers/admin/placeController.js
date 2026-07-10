@@ -4,6 +4,7 @@ import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
+import Review from '../../models/reviewModel.js';
 
 // Helper to map route parameter type to the corresponding Mongoose Model
 const getModelByType = (type) => {
@@ -38,7 +39,10 @@ const getPlaces = asyncHandler(async (req, res) => {
   }
 
   const places = await Model.find(filter).populate('city', 'name');
-  res.json(places);
+  res.json({
+    total: places.length,
+    places
+  });
 });
 
 // @desc    Get place by ID of a specific type
@@ -144,8 +148,11 @@ const deletePlace = asyncHandler(async (req, res) => {
   const place = await Model.findById(req.params.id);
 
   if (place) {
+    // Xóa tất cả reviews liên quan đến địa điểm này
+    await Review.deleteMany({ itemId: req.params.id });
+
     await Model.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Place removed successfully' });
+    res.json({ message: 'Place removed successfully along with associated reviews' });
   } else {
     res.status(404);
     throw new Error('Place not found');
