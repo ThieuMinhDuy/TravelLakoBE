@@ -1,5 +1,13 @@
 import express from 'express';
-import { createTrip, getMyTrips, getTripById, deleteTrip } from '../../controllers/customer/tripController.js';
+import {
+  createTrip,
+  getMyTrips,
+  getTripById,
+  deleteTrip,
+  addPlaceToSchedule,
+  removePlaceFromSchedule,
+  reorderSchedulePlaces
+} from '../../controllers/customer/tripController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -170,5 +178,118 @@ router.route('/')
 router.route('/:id')
   .get(protect, getTripById)
   .delete(protect, deleteTrip);
+
+/**
+ * @swagger
+ * /trips/{id}/schedule/places:
+ *   post:
+ *     summary: Thêm địa điểm vào lịch trình ngày của chuyến đi (Yêu cầu Đăng nhập)
+ *     tags: [Trips - Itinerary]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID chuyến đi
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - day
+ *               - placeType
+ *               - placeId
+ *             properties:
+ *               day:
+ *                 type: integer
+ *                 description: Số thứ tự ngày (Ví dụ 1, 2, 3...)
+ *               placeType:
+ *                 type: string
+ *                 enum: [Attraction, Hotel, Restaurant, Cafe]
+ *               placeId:
+ *                 type: string
+ *               note:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Thêm thành công
+ *       400:
+ *         description: Thông tin không hợp lệ hoặc ngày không tồn tại
+ *       401:
+ *         description: Chưa đăng nhập hoặc không có quyền
+ */
+router.post('/:id/schedule/places', protect, addPlaceToSchedule);
+
+/**
+ * @swagger
+ * /trips/{id}/schedule/reorder:
+ *   put:
+ *     summary: Sắp xếp lại thứ tự điểm đi trong ngày (Yêu cầu Đăng nhập)
+ *     tags: [Trips - Itinerary]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID chuyến đi
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - day
+ *               - placesOrder
+ *             properties:
+ *               day:
+ *                 type: integer
+ *               placesOrder:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Mảng chứa các ID phụ (places._id) theo thứ tự mới
+ *     responses:
+ *       200:
+ *         description: Sắp xếp thành công
+ *       400:
+ *         description: Lỗi đầu vào
+ */
+router.put('/:id/schedule/reorder', protect, reorderSchedulePlaces);
+
+/**
+ * @swagger
+ * /trips/{id}/schedule/places/{subId}:
+ *   delete:
+ *     summary: Xóa địa điểm khỏi lịch trình ngày (Yêu cầu Đăng nhập)
+ *     tags: [Trips - Itinerary]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID chuyến đi
+ *       - in: path
+ *         name: subId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID phụ của địa điểm trong schedule (places._id)
+ *     responses:
+ *       200:
+ *         description: Xóa thành công
+ */
+router.delete('/:id/schedule/places/:subId', protect, removePlaceFromSchedule);
 
 export default router;

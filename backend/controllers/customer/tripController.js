@@ -1,6 +1,10 @@
 import asyncHandler from 'express-async-handler';
 import Trip from '../../models/tripModel.js';
 import City from '../../models/cityModel.js';
+import Attraction from '../../models/attractionModel.js';
+import Hotel from '../../models/hotelModel.js';
+import Restaurant from '../../models/restaurantModel.js';
+import Cafe from '../../models/cafeModel.js';
 
 // @desc    Create a new trip
 // @route   POST /api/trips
@@ -152,4 +156,180 @@ const deleteTrip = asyncHandler(async (req, res) => {
   res.json({ message: 'Trip removed successfully' });
 });
 
-export { createTrip, getMyTrips, getTripById, deleteTrip };
+// @desc    Add a place to a specific day in trip schedule
+// @route   POST /api/trips/:id/schedule/places
+// @access  Private
+const addPlaceToSchedule = asyncHandler(async (req, res) => {
+  const { day, placeType, placeId, note } = req.body;
+
+  if (!day || !placeType || !placeId) {
+    res.status(400);
+    throw new Error('Please provide day, placeType, and placeId');
+  }
+
+  const validTypes = ['Attraction', 'Hotel', 'Restaurant', 'Cafe'];
+  const typeMatch = validTypes.find(t => t.toLowerCase() === placeType.toLowerCase());
+  if (!typeMatch) {
+    res.status(400);
+    throw new Error('Invalid placeType. Must be: Attraction, Hotel, Restaurant, Cafe');
+  }
+
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  // Check if place exists
+  let Model;
+  if (typeMatch === 'Attraction') Model = Attraction;
+  else if (typeMatch === 'Hotel') Model = Hotel;
+  else if (typeMatch === 'Restaurant') Model = Restaurant;
+  else if (typeMatch === 'Cafe') Model = Cafe;
+
+  const place = await Model.findById(placeId);
+  if (!place) {
+    res.status(404);
+    throw new Error(`${typeMatch} not found`);
+  }
+
+  // Find target day in schedule
+  const daySchedule = trip.schedule.find(s => s.day === Number(day));
+  if (!daySchedule) {
+    res.status(400);
+    throw new Error(`Day ${day} does not exist in this trip's schedule`);
+  }
+
+  // Calculate order
+  const order = daySchedule.places.length;
+
+  daySchedule.places.push({
+    placeType: typeMatch,
+    placeId,
+    order,
+    note: note || ''
+  });
+
+  await trip.save();
+  res.status(201).json(trip);
+});
+
+// @desc    Remove a place from trip schedule
+// @route   DELETE /api/trips/:id/schedule/places/:subId
+// @access  Private
+const removePlaceFromSchedule = asyncHandler(async (req, res) => {
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  const { subId } = req.params;
+
+  // Find day containing the place subdocument
+  let foundDay = null;
+  for (const daySchedule of trip.schedule) {
+    const itemIndex = daySchedule.places.findIndex(p => p._id.toString() === subId);
+    if (itemIndex !== -1) {
+      foundDay = daySchedule;
+      // Remove item
+      daySchedule.places.splice(itemIndex, 1);
+      break;
+    }
+  }
+
+  if (!foundDay) {
+    res.status(404);
+    throw new Error('Place not found in trip schedule');
+  }
+
+  // Reorder remaining places in that day
+  foundDay.places.sort((a, b) => a.order - b.order);
+  foundDay.places.forEach((p, idx) => {
+    p.order = idx;
+  });
+
+  await trip.save();
+  res.json(trip);
+});
+
+// @desc    Reorder places in a specific day's schedule
+// @route   PUT /api/trips/:id/schedule/reorder
+// @access  Private
+const reorderSchedulePlaces = asyncHandler(async (req, res) => {
+  const { day, placesOrder } = req.body; // placesOrder is array of subdocument _id strings
+
+  if (!day || !Array.isArray(placesOrder)) {
+    res.status(400);
+    throw new Error('Please provide day and placesOrder array of IDs');
+  }
+
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  const daySchedule = trip.schedule.find(s => s.day === Number(day));
+  if (!daySchedule) {
+    res.status(400);
+    throw new Error(`Day ${day} does not exist in this trip's schedule`);
+  }
+
+  // Map to hold items by their subId
+  const placesMap = {};
+  daySchedule.places.forEach(p => {
+    placesMap[p._id.toString()] = p;
+  });
+
+  // Build new array of places with updated orders
+  const newPlaces = [];
+  placesOrder.forEach((subId, idx) => {
+    const placeItem = placesMap[subId];
+    if (placeItem) {
+      placeItem.order = idx;
+      newPlaces.push(placeItem);
+      // Remove from map to track any omitted items
+      delete placesMap[subId];
+    }
+  });
+
+  // Append any items that were not included in placesOrder to the end
+  const remainingItems = Object.values(placesMap);
+  remainingItems.forEach((placeItem, idx) => {
+    placeItem.order = newPlaces.length + idx;
+    newPlaces.push(placeItem);
+  });
+
+  daySchedule.places = newPlaces;
+  await trip.save();
+  res.json(trip);
+});
+
+export {
+  createTrip,
+  getMyTrips,
+  getTripById,
+  deleteTrip,
+  addPlaceToSchedule,
+  removePlaceFromSchedule,
+  reorderSchedulePlaces
+};
