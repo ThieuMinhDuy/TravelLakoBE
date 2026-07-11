@@ -324,6 +324,91 @@ const reorderSchedulePlaces = asyncHandler(async (req, res) => {
   res.json(trip);
 });
 
+// @desc    Check-in/visited place in schedule (Designed mainly for Mobile App)
+// @route   PATCH /api/trips/:id/schedule/places/:subId/check-in
+// @access  Private
+const checkInPlace = asyncHandler(async (req, res) => {
+  const { visited } = req.body;
+
+  if (visited === undefined) {
+    const error = new Error('Please provide visited status (true or false)');
+    res.status(400);
+    throw error;
+  }
+
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  const { subId } = req.params;
+
+  let foundPlace = null;
+  for (const daySchedule of trip.schedule) {
+    const item = daySchedule.places.find(p => p._id.toString() === subId);
+    if (item) {
+      foundPlace = item;
+      break;
+    }
+  }
+
+  if (!foundPlace) {
+    res.status(404);
+    throw new Error('Place not found in trip schedule');
+  }
+
+  foundPlace.visited = !!visited;
+  if (foundPlace.visited) {
+    foundPlace.checkInTime = new Date();
+  } else {
+    foundPlace.checkInTime = undefined;
+  }
+
+  await trip.save();
+  res.json(trip);
+});
+
+// @desc    Update trip diary notes and photos (For both Mobile App and Web App)
+// @route   PUT /api/trips/:id/diary
+// @access  Private
+const updateTripDiary = asyncHandler(async (req, res) => {
+  const { notes, photos } = req.body;
+
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  if (notes !== undefined) {
+    trip.diary.notes = notes;
+  }
+  if (photos !== undefined) {
+    if (!Array.isArray(photos)) {
+      const error = new Error('Photos must be an array of strings');
+      res.status(400);
+      throw error;
+    }
+    trip.diary.photos = photos;
+  }
+
+  await trip.save();
+  res.json(trip);
+});
+
 export {
   createTrip,
   getMyTrips,
@@ -331,5 +416,7 @@ export {
   deleteTrip,
   addPlaceToSchedule,
   removePlaceFromSchedule,
-  reorderSchedulePlaces
+  reorderSchedulePlaces,
+  checkInPlace,
+  updateTripDiary
 };

@@ -6,7 +6,9 @@ import {
   deleteTrip,
   addPlaceToSchedule,
   removePlaceFromSchedule,
-  reorderSchedulePlaces
+  reorderSchedulePlaces,
+  checkInPlace,
+  updateTripDiary
 } from '../../controllers/customer/tripController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -106,7 +108,7 @@ const router = express.Router();
  *       401:
  *         description: Chưa đăng nhập
  *   get:
- *     summary: Lấy danh sách chuyến đi của tôi (Phân nhóm: Sắp tới, Đang đi, Lịch sử)
+ *     summary: "Lấy danh sách chuyến đi của tôi (Phân nhóm: Sắp tới, Đang đi, Lịch sử)"
  *     tags: [Trips]
  *     security:
  *       - cookieAuth: []
@@ -291,5 +293,88 @@ router.put('/:id/schedule/reorder', protect, reorderSchedulePlaces);
  *         description: Xóa thành công
  */
 router.delete('/:id/schedule/places/:subId', protect, removePlaceFromSchedule);
+
+/**
+ * @swagger
+ * /trips/{id}/schedule/places/{subId}/check-in:
+ *   patch:
+ *     summary: Đánh dấu đã tham quan / Check-in địa điểm (Dành riêng cho Mobile App)
+ *     description: Endpoint này phục vụ chính cho tính năng Check-in thực tế trên Mobile App dựa trên GPS hoặc hành động của người dùng tại địa điểm.
+ *     tags: [Trips - Itinerary]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID chuyến đi
+ *       - in: path
+ *         name: subId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID phụ của địa điểm (places._id) trong lịch trình
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - visited
+ *             properties:
+ *               visited:
+ *                 type: boolean
+ *                 description: "Trạng thái check-in (true: đã đi, false: chưa đi)"
+ *     responses:
+ *       200:
+ *         description: Cập nhật check-in thành công, trả về chi tiết chuyến đi
+ *       400:
+ *         description: Thiếu trường dữ liệu visited
+ *       401:
+ *         description: Chưa đăng nhập hoặc không có quyền
+ */
+router.patch('/:id/schedule/places/:subId/check-in', protect, checkInPlace);
+
+/**
+ * @swagger
+ * /trips/{id}/diary:
+ *   put:
+ *     summary: Cập nhật Nhật ký chuyến đi & Hình ảnh tải lên (Dùng cho cả Web và Mobile)
+ *     description: Người dùng viết chia sẻ trải nghiệm (diary notes) và đính kèm danh sách ảnh (url) sau chuyến đi.
+ *     tags: [Trips - Itinerary]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID chuyến đi
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes:
+ *                 type: string
+ *                 description: Ghi chú nhật ký trải nghiệm
+ *               photos:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Mảng chứa các link ảnh du lịch (tải lên thông qua CDN / Cloudinary)
+ *     responses:
+ *       200:
+ *         description: Cập nhật nhật ký thành công
+ *       401:
+ *         description: Chưa đăng nhập hoặc không có quyền
+ */
+router.put('/:id/diary', protect, updateTripDiary);
 
 export default router;
