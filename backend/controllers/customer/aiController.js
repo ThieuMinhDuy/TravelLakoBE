@@ -200,8 +200,161 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
 // @route   POST /api/ai/optimize/:tripId
 // @access  Private
 const optimizeExistingTrip = asyncHandler(async (req, res) => {
-  // Placeholder for Sprint 3
-  res.status(501).json({ message: 'Optimize API is not implemented yet. Comming in Sprint 3!' });
+  const trip = await Trip.findOne({ _id: req.params.tripId, user: req.user._id });
+  if (!trip) {
+    res.status(404);
+    throw new Error('Chuyến đi không tồn tại hoặc bạn không có quyền chỉnh sửa.');
+  }
+
+  const optimizedSchedule = [];
+
+  for (const dayItem of trip.schedule) {
+    const placesWithCoords = [];
+    
+    for (const place of dayItem.places) {
+      let placeDetails = null;
+      if (place.placeType === 'Hotel') {
+        placeDetails = await Hotel.findById(place.placeId).lean();
+      } else if (place.placeType === 'Attraction') {
+        placeDetails = await Attraction.findById(place.placeId).lean();
+      } else if (place.placeType === 'Restaurant') {
+        placeDetails = await Restaurant.findById(place.placeId).lean();
+      } else if (place.placeType === 'Cafe') {
+        placeDetails = await Cafe.findById(place.placeId).lean();
+      }
+
+      if (placeDetails) {
+        placesWithCoords.push({
+          placeType: place.placeType,
+          placeId: place.placeId.toString(),
+          name: placeDetails.name,
+          lat: placeDetails.coordinates.lat,
+          lng: placeDetails.coordinates.lng,
+          note: place.note || '',
+          visited: place.visited || false,
+          checkInTime: place.checkInTime
+        });
+      }
+    }
+
+    if (placesWithCoords.length > 1) {
+      const placesText = placesWithCoords.map((p, idx) => 
+        `- [${p.placeType}] Tên: "${p.name}", placeId: "${p.placeId}", vĩ độ (lat): ${p.lat}, kinh độ (lng): ${p.lng}`
+      ).join('\n');
+
+      const systemPrompt = `Bạn là một trợ lý ảo tối ưu hóa lịch trình du lịch thông minh cho ứng dụng TravelLako.
+Nhiệm vụ của bạn là nhận danh sách các địa điểm trong 1 ngày, kèm theo tọa độ kinh độ/vĩ độ của chúng.
+Hãy sắp xếp lại thứ tự di chuyển (order từ 0 tăng dần) sao cho quãng đường di chuyển tổng cộng giữa các điểm là tối ưu nhất (ngắn nhất, không bị đi vòng ngược lại).
+Nếu có địa điểm là Khách sạn (Hotel), hãy LUÔN đặt nó ở đầu tiên (order: 0) làm điểm xuất phát.
+Bạn phải trả về kết quả dưới dạng JSON là một mảng các địa điểm đã được sắp xếp lại thứ tự, khớp chính xác cấu trúc JSON Schema yêu cầu.
+TUYỆT ĐỐI không thay đổi placeId hay placeType của bất kỳ địa điểm nào.
+
+DANH SÁCH ĐỊA ĐIỂM CẦN SẮP XẾP:
+${placesText}`;
+
+      const userPrompt = `Hãy tối ưu hóa thứ tự di chuyển cho các địa điểm trên.
+Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đường di chuyển ngắn nhất.'}`;
+
+      const geminiApiKey = process.env.GEMINI_API_KEY;
+      const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`;
+
+      const requestBody = {
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: systemPrompt },
+              { text: userPrompt }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: 'object',
+            properties: {
+              optimizedPlaces: {
+                type: 'array',
+                description: 'Danh sách các địa điểm sau khi đã tối ưu hóa thứ tự di chuyển',
+                items: {
+                  type: 'object',
+                  properties: {
+                    placeId: { type: 'string', description: 'ID chính xác của địa điểm đã cho' },
+                    placeType: { type: 'string', description: 'Loại địa điểm' },
+                    order: { type: 'integer', description: 'Thứ tự mới sau khi tối ưu (0, 1, 2...)' },
+                    note: { type: 'string', description: 'Ghi chú di chuyển hoặc lý do sắp xếp' }
+                  },
+                  required: ['placeId', 'placeType', 'order']
+                }
+              }
+            },
+            required: ['optimizedPlaces']
+          }
+        }
+      };
+
+      try {
+        const response = await fetch(geminiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody)
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error?.message || 'Lỗi khi gọi Gemini API để tối ưu.');
+        }
+
+        const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const resultJson = JSON.parse(aiText);
+
+        const optimizedPlacesMap = new Map();
+        resultJson.optimizedPlaces.forEach(op => {
+          optimizedPlacesMap.set(op.placeId.toString(), op);
+        });
+
+        const reorderedPlaces = placesWithCoords.map(p => {
+          const opt = optimizedPlacesMap.get(p.placeId.toString());
+          return {
+            placeType: p.placeType,
+            placeId: p.placeId,
+            order: opt ? opt.order : 0,
+            note: opt && opt.note ? opt.note : p.note,
+            visited: p.visited,
+            checkInTime: p.checkInTime
+          };
+        }).sort((a, b) => a.order - b.order);
+
+        reorderedPlaces.forEach((p, idx) => {
+          p.order = idx;
+        });
+
+        optimizedSchedule.push({
+          day: dayItem.day,
+          date: dayItem.date,
+          places: reorderedPlaces
+        });
+
+      } catch (err) {
+        optimizedSchedule.push({
+          day: dayItem.day,
+          date: dayItem.date,
+          places: dayItem.places
+        });
+      }
+    } else {
+      optimizedSchedule.push({
+        day: dayItem.day,
+        date: dayItem.date,
+        places: dayItem.places
+      });
+    }
+  }
+
+  trip.schedule = optimizedSchedule;
+  const updatedTrip = await trip.save();
+
+  res.status(200).json(updatedTrip);
 });
 
 export {

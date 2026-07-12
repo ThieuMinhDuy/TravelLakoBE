@@ -146,9 +146,11 @@ router.post('/suggest', protect, generateAISuggestion);
  *                 example: "Hãy sắp xếp các quán cafe vào buổi sáng nhé"
  *     responses:
  *       200:
- *         description: "Tối ưu lịch trình thành công"
- *       501:
- *         description: "Tính năng chưa được triển khai (Sẽ hoàn thiện ở Sprint 3)"
+ *         description: "Tối ưu lịch trình thành công và trả về thông tin chuyến đi đã cập nhật"
+ *       404:
+ *         description: "Chuyến đi không tồn tại hoặc không thuộc về người dùng"
+ *       500:
+ *         description: "Lỗi server hoặc lỗi kết nối Gemini API"
  */
 router.post('/optimize/:tripId', protect, optimizeExistingTrip);
 
