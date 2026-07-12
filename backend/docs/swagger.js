@@ -20,6 +20,11 @@ const options = {
                     type: "apiKey",
                     in: "cookie",
                     name: "jwt"
+                },
+                bearerAuth: {
+                    type: "http",
+                    scheme: "bearer",
+                    bearerFormat: "JWT"
                 }
             }
         }
