@@ -47,15 +47,34 @@ const createTrip = asyncHandler(async (req, res) => {
   const duration = Math.ceil((endUTC - startUTC) / oneDayMs) + 1;
 
   // Generate schedule days
-  const schedule = [];
-  for (let i = 1; i <= duration; i++) {
-    const dayDate = new Date(startUTC);
-    dayDate.setUTCDate(startUTC.getUTCDate() + (i - 1));
-    schedule.push({
-      day: i,
-      date: dayDate,
-      places: []
+  let schedule = [];
+  if (req.body.schedule && Array.isArray(req.body.schedule)) {
+    schedule = req.body.schedule.map((item, index) => {
+      const dayDate = new Date(startUTC);
+      dayDate.setUTCDate(startUTC.getUTCDate() + index);
+      return {
+        day: item.day || (index + 1),
+        date: dayDate,
+        places: (item.places || []).map((p, pIndex) => ({
+          placeType: p.placeType,
+          placeId: p.placeId,
+          order: p.order !== undefined ? p.order : pIndex,
+          note: p.note || '',
+          visited: p.visited || false,
+          checkInTime: p.checkInTime ? new Date(p.checkInTime) : undefined
+        }))
+      };
     });
+  } else {
+    for (let i = 1; i <= duration; i++) {
+      const dayDate = new Date(startUTC);
+      dayDate.setUTCDate(startUTC.getUTCDate() + (i - 1));
+      schedule.push({
+        day: i,
+        date: dayDate,
+        places: []
+      });
+    }
   }
 
   const trip = new Trip({
