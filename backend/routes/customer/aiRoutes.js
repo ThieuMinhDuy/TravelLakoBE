@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   generateAISuggestion,
+  chatWithAI,
   optimizeExistingTrip
 } from '../../controllers/customer/aiController.js';
 import { protect } from '../../middleware/authMiddleware.js';
@@ -13,6 +14,61 @@ const router = express.Router();
  *   name: AI Assistant
  *   description: Trợ lý ảo AI thiết lập và tối ưu lịch trình du lịch sử dụng Gemini API
  */
+
+/**
+ * @swagger
+ * /api/ai/chat:
+ *   post:
+ *     summary: "Trò chuyện tự do với Trợ lý ảo AI"
+ *     description: "Nhận tin nhắn của người dùng và lịch sử hội thoại, gửi lên Gemini API để trả về câu trả lời tự nhiên dạng văn bản."
+ *     tags: [AI Assistant]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - message
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: "Tin nhắn gửi lên AI"
+ *                 example: "Hạ Long có những điểm du lịch nào nổi tiếng?"
+ *               history:
+ *                 type: array
+ *                 description: "Lịch sử cuộc hội thoại (tùy chọn)"
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     role:
+ *                       type: string
+ *                       enum: [user, assistant]
+ *                     parts:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           text:
+ *                             type: string
+ *     responses:
+ *       200:
+ *         description: "Câu trả lời của AI"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reply:
+ *                   type: string
+ *       401:
+ *         description: "Chưa đăng nhập"
+ *       429:
+ *         description: "AI vượt quá giới hạn yêu cầu (Quota Limit)"
+ */
+router.post('/chat', protect, chatWithAI);
 
 /**
  * @swagger

@@ -410,6 +410,75 @@
       border-radius: 6px;
       font-weight: 600;
     }
+
+    /* AI Schedule UI */
+    .day-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 16px;
+      padding: 1.25rem;
+      transition: all 0.3s ease;
+      margin-bottom: 1rem;
+    }
+    .day-box:hover {
+      border-color: rgba(139, 92, 246, 0.2);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .day-title {
+      font-family: var(--font-title);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 0.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .places-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .place-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      font-size: 0.88rem;
+    }
+    .place-badge {
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .badge-hotel { background: rgba(6, 182, 212, 0.15); color: var(--accent); }
+    .badge-attraction { background: rgba(139, 92, 246, 0.15); color: var(--primary); }
+    .badge-restaurant { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-cafe { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    
+    .place-details {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+      flex-grow: 1;
+    }
+    .place-name {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+    .place-note {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      line-height: 1.3;
+    }
   </style>
 </head>
 <body>
@@ -428,6 +497,7 @@
       <button class="tab-btn" onclick="switchTab('register')">Đăng ký</button>
       <button class="tab-btn" id="verify-tab-btn" onclick="switchTab('verify')">Xác thực OTP</button>
       <button class="tab-btn" id="profile-tab-btn" style="display: none;" onclick="switchTab('profile')">Hồ sơ</button>
+      <button class="tab-btn" id="ai-tab-btn" style="display: none;" onclick="switchTab('ai')">Trợ lý AI</button>
       <button class="tab-btn" id="admin-tab-btn" style="display: none;" onclick="switchTab('admin')">Import Dữ Liệu</button>
     </div>
 
@@ -619,6 +689,115 @@
       </form>
     </div>
 
+    <!-- 5.5. Pane Trợ lý AI -->
+    <div class="form-pane" id="pane-ai">
+      <h2>🤖 Trợ lý Du lịch AI</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Trò chuyện trực tiếp với AI để nhận gợi ý địa điểm, ẩm thực, và sinh lịch trình du lịch thông minh.
+      </p>
+
+      <!-- Khung chat box -->
+      <div id="ai-chat-box" style="display: flex; flex-direction: column; height: 350px; background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; margin-bottom: 1rem; overflow: hidden;">
+        <!-- Chat History -->
+        <div id="ai-chat-messages" style="flex-grow: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Tin nhắn đầu tiên chào mừng -->
+          <div class="chat-msg ai-msg" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 80%;">
+            <span style="font-size: 0.7rem; color: var(--primary); font-weight: 600; margin-bottom: 0.2rem;">TravelLako AI</span>
+            <div style="background: rgba(255, 255, 255, 0.05); padding: 0.6rem 0.9rem; border-radius: 4px 12px 12px 12px; font-size: 0.85rem; line-height: 1.4; color: var(--text-main);">
+              Xin chào! Tôi là Trợ lý Du lịch TravelLako. Hãy trò chuyện với tôi để tìm kiếm địa điểm vui chơi, gợi ý khách sạn, nhà hàng hoặc quán cafe ngon ở bất kỳ thành phố nào của Việt Nam. 😊
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat Input Area -->
+        <div style="display: flex; gap: 0.5rem; padding: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(0, 0, 0, 0.15);">
+          <input type="text" id="chat-input" class="form-control" placeholder="Nhập câu hỏi hoặc lời nhắn cho AI..." onkeydown="if(event.key === 'Enter') handleSendChatMessage()" style="margin-bottom: 0; flex-grow: 1;">
+          <button class="btn" onclick="handleSendChatMessage()" id="btn-send-chat" style="padding: 0.5rem 1.25rem; font-size: 0.85rem; width: auto; flex-shrink: 0; background: var(--primary);">Gửi</button>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+        <button class="btn btn-secondary" onclick="toggleAIConfigPanel()" style="font-size: 0.8rem; padding: 0.4rem 0.8rem; width: auto; flex-grow: 1;">⚙️ Cấu hình sinh lịch trình</button>
+        <button class="btn" onclick="handleGenerateAISuggestion()" id="btn-submit-ai" style="font-size: 0.8rem; padding: 0.4rem 0.8rem; width: auto; flex-grow: 1; background: var(--accent);">🤖 Sinh lịch trình thông minh</button>
+      </div>
+
+      <!-- Collapsible Configuration Panel -->
+      <div id="ai-config-panel" style="display: none; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
+        <h4 style="font-size: 0.9rem; color: var(--primary); margin-bottom: 0.75rem;">⚙️ Cấu hình chi tiết chuyến đi</h4>
+        <div class="form-group">
+          <label for="ai-notes">Lời nhắn / Yêu cầu chính (Tự phát hiện thành phố nếu chứa tên thành phố như: Hạ Long, Phú Quốc, Huế...)</label>
+          <textarea id="ai-notes" class="form-control" rows="2" placeholder="Ví dụ: Tôi muốn đi du lịch ở thành phố Hạ Long 2 ngày 1 đêm với ngân sách 2 triệu..."></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="ai-budget">Ngân sách</label>
+            <select id="ai-budget" class="form-control">
+              <option value="Trung bình">Trung bình</option>
+              <option value="Tiết kiệm">Tiết kiệm</option>
+              <option value="Sang trọng">Sang trọng</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="ai-preferences">Sở thích đặc biệt</label>
+            <input type="text" id="ai-preferences" class="form-control" placeholder="Ví dụ: ngắm cảnh biển, hải sản, cafe...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Kết quả gợi ý lịch trình -->
+      <div id="ai-result-section" style="display: none; margin-top: 2rem;">
+        <div class="divider" style="margin: 1.5rem 0;"></div>
+        <h3 style="font-size: 1.2rem; color: var(--accent); margin-bottom: 0.5rem;" id="ai-suggested-title">Tên chuyến đi</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+          📍 Thành phố: <span id="ai-city-name" style="color: var(--text-main); font-weight: 500;"></span> | 
+          💰 Chi phí: <span id="ai-estimated-cost" style="color: var(--success); font-weight: 600;"></span>
+        </p>
+
+        <!-- Danh sách lịch trình chi tiết -->
+        <div id="ai-schedule-list" style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+          <!-- Tải động các ngày và địa điểm du lịch -->
+        </div>
+
+        <!-- Action buttons -->
+        <div id="ai-action-buttons" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+          <button class="btn" style="background: var(--success);" id="btn-save-trip" onclick="handleSaveTrip()">💾 Lưu chuyến đi này vào tài khoản</button>
+        </div>
+      </div>
+
+      <!-- Section Tối ưu hóa GPS cho bất kỳ chuyến đi nào -->
+      <div class="divider" style="margin: 2rem 0;"></div>
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; padding: 1.25rem;">
+        <h3 style="font-size: 1.1rem; color: var(--primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+          ⚡ Tối ưu hóa lộ trình di chuyển (GPS)
+        </h3>
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          Chọn bất kỳ chuyến đi nào trong tài khoản của bạn để AI tự động sắp xếp lại thứ tự các địa điểm di chuyển ngắn nhất theo GPS và nhịp sinh hoạt hợp lý.
+        </p>
+        <div class="form-group">
+          <label for="optimize-trip-select">Chọn chuyến đi của bạn</label>
+          <select id="optimize-trip-select" class="form-control">
+            <option value="">-- Đang tải danh sách chuyến đi... --</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-top: 0.75rem;">
+          <label for="optimize-trip-notes">Yêu cầu di chuyển đặc biệt (tùy chọn)</label>
+          <input type="text" id="optimize-trip-notes" class="form-control" placeholder="Ví dụ: Ưu tiên cafe vào buổi sáng, khách sạn làm điểm xuất phát...">
+        </div>
+        <button class="btn" style="width: 100%; margin-top: 0.75rem; background: var(--primary);" id="btn-run-optimize" onclick="handleOptimizeCustomTrip()">
+          ⚡ Chạy tối ưu hóa GPS
+        </button>
+
+        <!-- Kết quả sau khi tối ưu hóa chuyến đi tự chọn -->
+        <div id="optimize-result-section" style="display: none; margin-top: 1.5rem; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 1rem;">
+          <h4 style="font-size: 0.95rem; color: var(--success); margin-bottom: 0.75rem;">✅ Lịch trình sau khi đã tối ưu GPS:</h4>
+          <div id="optimize-schedule-list" style="display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Render kết quả chuyến đi sau tối ưu -->
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 6. Pane Admin Import Tool -->
     <div class="form-pane" id="pane-admin">
       <h2>🛠️ Admin Bulk Import Tool (OSM)</h2>
@@ -682,6 +861,8 @@
 
       if (tabName === 'admin') {
         loadVietnamCitiesList();
+      } else if (tabName === 'ai') {
+        fetchUserTripsForOptimizer();
       }
     }
 
@@ -898,6 +1079,9 @@
         radio.checked = user.favoriteBudget === radio.value;
       });
 
+      // Show AI tab button
+      document.getElementById('ai-tab-btn').style.display = 'block';
+
       // Show admin tab if admin user
       if (user.isAdmin) {
         document.getElementById('admin-tab-btn').style.display = 'block';
@@ -1028,6 +1212,7 @@
       showToast('Đã đăng xuất khỏi hệ thống.');
       
       document.getElementById('profile-tab-btn').style.display = 'none';
+      document.getElementById('ai-tab-btn').style.display = 'none';
       document.getElementById('admin-tab-btn').style.display = 'none';
       document.getElementById('verify-tab-btn').style.display = 'block';
       
@@ -1132,11 +1317,344 @@
       }
     }
 
+    // Global variables for AI functions
+    let currentAISuggestion = null;
+    let savedTripId = null;
+    let aiChatHistory = [];
+
+    function toggleAIConfigPanel() {
+      const panel = document.getElementById('ai-config-panel');
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+      } else {
+        panel.style.display = 'none';
+      }
+    }
+
+    async function handleSendChatMessage() {
+      const token = getToken();
+      if (!token) {
+        showToast('Vui lòng đăng nhập để sử dụng tính năng này!', 'error');
+        return;
+      }
+
+      const inputEl = document.getElementById('chat-input');
+      const message = inputEl.value.trim();
+      if (!message) return;
+
+      inputEl.value = '';
+      inputEl.disabled = true;
+
+      const btnSend = document.getElementById('btn-send-chat');
+      const originalBtnText = btnSend.textContent;
+      btnSend.disabled = true;
+      btnSend.textContent = '...';
+
+      // Append User message to Chat UI
+      const chatMessagesContainer = document.getElementById('ai-chat-messages');
+      const userMsgHtml = `
+        <div class="chat-msg user-msg" style="display: flex; flex-direction: column; align-items: flex-end; max-width: 80%; align-self: flex-end;">
+          <span style="font-size: 0.7rem; color: var(--accent); font-weight: 600; margin-bottom: 0.2rem;">Bạn</span>
+          <div style="background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 0.6rem 0.9rem; border-radius: 12px 4px 12px 12px; font-size: 0.85rem; line-height: 1.4; color: #fff;">
+            ${message}
+          </div>
+        </div>
+      `;
+      chatMessagesContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+
+      // Update AI notes with user's last message to make generating suggestions easier
+      document.getElementById('ai-notes').value = message;
+
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            message,
+            history: aiChatHistory
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          // Append AI message to Chat UI
+          const aiMsgHtml = `
+            <div class="chat-msg ai-msg" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 80%;">
+              <span style="font-size: 0.7rem; color: var(--primary); font-weight: 600; margin-bottom: 0.2rem;">TravelLako AI</span>
+              <div style="background: rgba(255, 255, 255, 0.05); padding: 0.6rem 0.9rem; border-radius: 4px 12px 12px 12px; font-size: 0.85rem; line-height: 1.4; color: var(--text-main);">
+                ${data.reply.replace(/\n/g, '<br>')}
+              </div>
+            </div>
+          `;
+          chatMessagesContainer.insertAdjacentHTML('beforeend', aiMsgHtml);
+          chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+
+          // Push to history state
+          aiChatHistory.push({ role: 'user', parts: [{ text: message }] });
+          aiChatHistory.push({ role: 'model', parts: [{ text: data.reply }] });
+        } else {
+          showToast(data.message || 'Lỗi khi kết nối với AI.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ hoặc Gemini API bận.', 'error');
+      } finally {
+        inputEl.disabled = false;
+        btnSend.disabled = false;
+        btnSend.textContent = originalBtnText;
+        inputEl.focus();
+      }
+    }
+
+    async function handleGenerateAISuggestion() {
+      const token = getToken();
+      if (!token) {
+        showToast('Vui lòng đăng nhập để sử dụng tính năng này!', 'error');
+        return;
+      }
+
+      const notes = document.getElementById('ai-notes').value.trim();
+      const budget = document.getElementById('ai-budget').value;
+      const preferences = document.getElementById('ai-preferences').value.trim();
+
+      if (!notes) {
+        showToast('Vui lòng nhập lời nhắn hoặc cấu hình chi tiết chuyến đi ở phần cấu hình!', 'error');
+        // Open the config panel for user convenience
+        document.getElementById('ai-config-panel').style.display = 'block';
+        return;
+      }
+
+      const btnSubmit = document.getElementById('btn-submit-ai');
+      const originalText = btnSubmit.textContent;
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = '⏳ Đang sinh lịch trình...';
+
+      // Hide previous result
+      document.getElementById('ai-result-section').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/ai/suggest', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            notes,
+            budget,
+            preferences,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString() // 3 ngày
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Đã sinh lịch trình AI gợi ý thành công!');
+          currentAISuggestion = data;
+          savedTripId = null;
+
+          document.getElementById('ai-suggested-title').textContent = data.suggestedTitle;
+          document.getElementById('ai-city-name').textContent = data.city.name;
+          document.getElementById('ai-estimated-cost').textContent = data.estimatedTotalCost ? data.estimatedTotalCost.toLocaleString('vi-VN') + ' VNĐ' : 'Chưa rõ';
+
+          await renderAISchedule(data.schedule, 'ai-schedule-list');
+          document.getElementById('ai-result-section').style.display = 'block';
+        } else {
+          showToast(data.message || 'Không thể sinh gợi ý lịch trình.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ hoặc Gemini API bận.', 'error');
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmit.textContent = originalText;
+      }
+    }
+
+    async function fetchPlaceNameCached(placeType, placeId) {
+      try {
+        const res = await fetch(`/api/places/${placeType.toLowerCase()}/${placeId}`);
+        if (res.ok) {
+          const pData = await res.json();
+          return pData.name;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      return `Địa điểm ${placeId}`;
+    }
+
+    async function renderAISchedule(schedule, containerId) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '⏳ Đang tải tên các địa điểm du lịch thực tế...';
+
+      let html = '';
+      for (const dayData of schedule) {
+        html += `
+          <div class="day-box">
+            <div class="day-title">
+              <span>📅 Ngày ${dayData.day}</span>
+            </div>
+            <div class="places-list">
+        `;
+
+        for (const place of dayData.places) {
+          const placeName = await fetchPlaceNameCached(place.placeType, place.placeId);
+          let badgeClass = 'badge-attraction';
+          if (place.placeType === 'Hotel') badgeClass = 'badge-hotel';
+          else if (place.placeType === 'Restaurant') badgeClass = 'badge-restaurant';
+          else if (place.placeType === 'Cafe') badgeClass = 'badge-cafe';
+
+          html += `
+            <div class="place-item">
+              <span class="place-badge ${badgeClass}">${place.placeType}</span>
+              <div class="place-details">
+                <span class="place-name">${placeName}</span>
+                <span class="place-note">💡 ${place.note}</span>
+              </div>
+            </div>
+          `;
+        }
+
+        html += `
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    async function handleSaveTrip() {
+      if (!currentAISuggestion) return;
+      const token = getToken();
+
+      const btnSave = document.getElementById('btn-save-trip');
+      btnSave.disabled = true;
+      btnSave.textContent = '⏳ Đang lưu chuyến đi...';
+
+      try {
+        const res = await fetch('/api/trips', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            title: currentAISuggestion.suggestedTitle,
+            city: currentAISuggestion.city._id,
+            startDate: new Date().toISOString(),
+            endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+            budget: currentAISuggestion.estimatedTotalCost || 3000000,
+            schedule: currentAISuggestion.schedule
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Đã lưu chuyến đi thành công vào tài khoản của bạn!');
+          savedTripId = data._id;
+          btnSave.textContent = '✅ Đã lưu vào tài khoản';
+          
+          // Refresh trip optimizer selector to include the newly saved trip
+          fetchUserTripsForOptimizer();
+        } else {
+          showToast(data.message || 'Lưu chuyến đi thất bại.', 'error');
+          btnSave.disabled = false;
+          btnSave.textContent = '💾 Lưu chuyến đi này vào tài khoản';
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+        btnSave.disabled = false;
+        btnSave.textContent = '💾 Lưu chuyến đi này vào tài khoản';
+      }
+    }
+
+    async function fetchUserTripsForOptimizer() {
+      const token = getToken();
+      if (!token) return;
+      const select = document.getElementById('optimize-trip-select');
+      select.innerHTML = '<option value="">-- Đang tải danh sách chuyến đi... --</option>';
+
+      try {
+        const res = await fetch('/api/trips', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          let html = '<option value="">-- Chọn chuyến đi của bạn --</option>';
+          const allTrips = [...(data.upcoming || []), ...(data.ongoing || []), ...(data.past || [])];
+          if (allTrips.length === 0) {
+            html = '<option value="">Bạn chưa có chuyến đi nào.</option>';
+          } else {
+            allTrips.forEach(t => {
+              html += `<option value="${t._id}">${t.title} (${t.city ? t.city.name : 'Chưa rõ thành phố'})</option>`;
+            });
+          }
+          select.innerHTML = html;
+        } else {
+          select.innerHTML = '<option value="">Không thể tải danh sách chuyến đi.</option>';
+        }
+      } catch (e) {
+        console.error(e);
+        select.innerHTML = '<option value="">Không thể kết nối máy chủ.</option>';
+      }
+    }
+
+    async function handleOptimizeCustomTrip() {
+      const select = document.getElementById('optimize-trip-select');
+      const tripId = select.value;
+      if (!tripId) {
+        showToast('Vui lòng chọn chuyến đi cần tối ưu!', 'error');
+        return;
+      }
+
+      const token = getToken();
+      const notes = document.getElementById('optimize-trip-notes').value.trim();
+      const btnOptimize = document.getElementById('btn-run-optimize');
+      const originalText = btnOptimize.textContent;
+      
+      btnOptimize.disabled = true;
+      btnOptimize.textContent = '⏳ Đang tối ưu lộ trình (GPS)...';
+      document.getElementById('optimize-result-section').style.display = 'none';
+
+      try {
+        const res = await fetch(`/api/ai/optimize/${tripId}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ notes })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Đã tối ưu hóa lịch trình bằng AI theo khoảng cách GPS thành công!');
+          await renderAISchedule(data.schedule, 'optimize-schedule-list');
+          document.getElementById('optimize-result-section').style.display = 'block';
+        } else {
+          showToast(data.message || 'Tối ưu hóa thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      } finally {
+        btnOptimize.disabled = false;
+        btnOptimize.textContent = originalText;
+      }
+    }
+
     // Page Load check: If already logged in, show profile tab button & load profile
     window.onload = () => {
       const token = getToken();
       if (token) {
         document.getElementById('profile-tab-btn').style.display = 'block';
+        document.getElementById('ai-tab-btn').style.display = 'block';
         switchTab('profile');
         fetchUserProfile();
       }
