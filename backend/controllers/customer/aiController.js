@@ -213,6 +213,51 @@ const chatWithAI = asyncHandler(async (req, res) => {
     throw new Error('Gemini API key chưa được cấu hình ở file .env');
   }
 
+  // 1. Search for city in message or recent history
+  let targetCity = null;
+  const citiesList = await City.find({});
+  const allHistoryText = (history || []).map(h => h.parts?.[0]?.text || '').join(' ') + ' ' + message;
+  const normalizedText = normalizeText(allHistoryText);
+
+  for (const city of citiesList) {
+    const normalizedCityName = normalizeText(city.name);
+    if (normalizedText.includes(normalizedCityName)) {
+      targetCity = city;
+      break;
+    }
+  }
+
+  let dbPlacesText = '';
+  const availableCityNames = citiesList.map(c => c.name).join(', ');
+
+  if (targetCity) {
+    const hotels = await Hotel.find({ city: targetCity._id }).lean();
+    const attractions = await Attraction.find({ city: targetCity._id }).lean();
+    const restaurants = await Restaurant.find({ city: targetCity._id }).lean();
+    const cafes = await Cafe.find({ city: targetCity._id }).lean();
+
+    const formatPlaces = (list, type) => {
+      return list.map(p => `- [${type}] Tên: "${p.name}", Chi tiết: "${p.description || ''}"${p.admissionFee !== undefined ? `, Vé vào: ${p.admissionFee}đ` : ''}${p.priceRange ? `, Giá: ${p.priceRange}` : ''}`).join('\n');
+    };
+
+    const placesListText = [
+      formatPlaces(hotels, 'Hotel'),
+      formatPlaces(attractions, 'Attraction'),
+      formatPlaces(restaurants, 'Restaurant'),
+      formatPlaces(cafes, 'Cafe')
+    ].filter(Boolean).join('\n\n');
+
+    dbPlacesText = `Danh sách địa điểm thực tế tại thành phố ${targetCity.name} của hệ thống TravelLako:
+${placesListText}
+
+QUY TẮC CỰC KỲ QUAN TRỌNG:
+- Bạn chỉ được phép gợi ý các địa điểm nằm trong danh sách thực tế của thành phố ${targetCity.name} ở trên.
+- Tuyệt đối không tự bịa ra bất kỳ khách sạn, quán cafe, nhà hàng hay điểm du lịch nào khác nằm ngoài danh sách này.`;
+  } else {
+    dbPlacesText = `Hệ thống hiện tại chỉ có dữ liệu du lịch cho các thành phố sau: ${availableCityNames}.
+Nếu người dùng hỏi hoặc yêu cầu gợi ý địa điểm ở bất kỳ thành phố nào khác ngoài danh sách trên, hãy lịch sự trả lời rằng hệ thống hiện chỉ hỗ trợ gợi ý và lên lịch trình cho các thành phố: ${availableCityNames}.`;
+  }
+
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`;
 
   const contents = [];
@@ -241,7 +286,11 @@ const chatWithAI = asyncHandler(async (req, res) => {
           text: `Bạn là một trợ lý du lịch ảo thân thiện tên là TravelLako.
 Nhiệm vụ của bạn là trò chuyện, giải đáp thắc mắc và gợi ý các địa điểm du lịch, khách sạn, ẩm thực, quán cafe... cho người dùng.
 Hãy trả lời một cách tự nhiên, lịch sự bằng Tiếng Việt.
-Khi người dùng yêu cầu lập lịch trình du lịch (ví dụ sau khi cung cấp số ngày đi, ngân sách, sở thích...), bạn hãy lập và phản hồi trực tiếp lịch trình chi tiết theo từng ngày (gồm Sáng, Chiều, Tối) ngay trong nội dung tin nhắn chat dưới dạng Markdown rõ ràng, thân thiện. Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.`
+
+Khi người dùng yêu cầu lập lịch trình du lịch (ví dụ sau khi cung cấp số ngày đi, ngân sách, sở thích...), bạn hãy lập và phản hồi trực tiếp lịch trình chi tiết theo từng ngày (gồm Sáng, Chiều, Tối) ngay trong nội dung tin nhắn chat dưới dạng Markdown rõ ràng, thân thiện. Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.
+
+DỮ LIỆU VÀ GIỚI HẠN GỢI Ý CỦA HỆ THỐNG:
+${dbPlacesText}`
         }
       ]
     }
