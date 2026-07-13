@@ -115,7 +115,7 @@ router.use(protect, admin);
  *         - city
  *         - description
  *         - cuisineType
- *         - priceRange
+ *         - price
  *         - address
  *       properties:
  *         name:
@@ -131,9 +131,8 @@ router.use(protect, admin);
  *             type: string
  *         cuisineType:
  *           type: string
- *         priceRange:
- *           type: string
- *           enum: ["$", "$$", "$$$"]
+ *         price:
+ *           type: number
  *         address:
  *           type: string
  *         coordinates:
@@ -144,7 +143,7 @@ router.use(protect, admin);
  *         description: "Phở gia truyền lâu đời."
  *         images: ["https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43"]
  *         cuisineType: "Ẩm thực Việt Nam"
- *         priceRange: "$"
+ *         price: 50000
  *         address: "61 Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội"
  *         coordinates:
  *           lat: 21.0298
@@ -156,7 +155,7 @@ router.use(protect, admin);
  *         - name
  *         - city
  *         - description
- *         - priceRange
+ *         - price
  *         - address
  *       properties:
  *         name:
@@ -170,9 +169,8 @@ router.use(protect, admin);
  *           type: array
  *           items:
  *             type: string
- *         priceRange:
- *           type: string
- *           enum: ["$", "$$", "$$$"]
+ *         price:
+ *           type: number
  *         address:
  *           type: string
  *         coordinates:
@@ -182,7 +180,7 @@ router.use(protect, admin);
  *         city: "60d0fe4f5311236168a109ca"
  *         description: "Không gian thời bao cấp."
  *         images: ["https://images.unsplash.com/photo-1554118811-1e0d58224f24"]
- *         priceRange: "$$"
+ *         price: 45000
  *         address: "27 Nhà Thờ, Hoàn Kiếm, Hà Nội"
  *         coordinates:
  *           lat: 21.0287

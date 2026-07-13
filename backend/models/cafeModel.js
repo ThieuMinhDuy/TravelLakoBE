@@ -19,9 +19,9 @@ const cafeSchema = mongoose.Schema(
       type: [String],
       default: [],
     },
-    priceRange: {
-      type: String,
-      default: '$$',
+    price: {
+      type: Number,
+      default: 0,
     },
     address: {
       type: String,

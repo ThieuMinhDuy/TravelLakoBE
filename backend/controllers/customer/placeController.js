@@ -70,14 +70,18 @@ const getPlaces = asyncHandler(async (req, res) => {
     if (req.query.cuisineType) {
       query.cuisineType = { $regex: req.query.cuisineType, $options: 'i' };
     }
-    if (req.query.priceRange) {
-      query.priceRange = req.query.priceRange;
+    if (req.query.minPrice || req.query.maxPrice) {
+      query.price = {};
+      if (req.query.minPrice) query.price.$gte = Number(req.query.minPrice);
+      if (req.query.maxPrice) query.price.$lte = Number(req.query.maxPrice);
     }
   }
 
   if (typeLower === 'cafe') {
-    if (req.query.priceRange) {
-      query.priceRange = req.query.priceRange;
+    if (req.query.minPrice || req.query.maxPrice) {
+      query.price = {};
+      if (req.query.minPrice) query.price.$gte = Number(req.query.minPrice);
+      if (req.query.maxPrice) query.price.$lte = Number(req.query.maxPrice);
     }
   }
 

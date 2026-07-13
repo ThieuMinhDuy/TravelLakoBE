@@ -1594,6 +1594,7 @@
     let currentAISuggestion = null;
     let savedTripId = null;
     let aiChatHistory = [];
+    let chatItineraries = {};
 
     function parseJwt(token) {
       try {
@@ -1828,6 +1829,7 @@
           let buttonHtml = '';
           if (isSuggestionResponse) {
             const textHash = getTextHash(data.reply);
+            chatItineraries[textHash] = data.reply;
             buttonHtml = `
               <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button class="btn" onclick="handleSaveChatTrip(this, '${textHash}')" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
@@ -1887,7 +1889,8 @@
       btn.textContent = '⏳ Đang phân tích và lưu...';
 
       try {
-        const notes = getCombinedHistoryText();
+        const itineraryText = chatItineraries[hash] || '';
+        const notes = itineraryText || getCombinedHistoryText();
         const defaultStartDate = new Date();
 
         // 1. Call AI suggest endpoint to parse structured JSON from chat text
@@ -1899,10 +1902,11 @@
           },
           body: JSON.stringify({
             notes: notes,
-            budget: 'Trung bình',
+            budget: 4000000,
             preferences: 'Tổng hợp',
             startDate: defaultStartDate.toISOString(),
-            endDate: new Date(defaultStartDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString()
+            endDate: new Date(defaultStartDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+            isParse: !!itineraryText
           })
         });
 
@@ -2095,7 +2099,8 @@
       let md = '';
       for (const dayData of schedule) {
         md += `### Ngày ${dayData.day}\n`;
-        for (const place of dayData.places) {
+        const sortedPlaces = [...dayData.places].sort((a, b) => (a.order || 0) - (b.order || 0));
+        for (const place of sortedPlaces) {
           const name = await fetchPlaceNameCached(place.placeType, place.placeId);
           let emoji = '🏛️';
           if (place.placeType === 'Hotel') emoji = '🏨';
@@ -2363,7 +2368,8 @@
             <div class="places-list">
         `;
 
-        for (const place of dayData.places) {
+        const sortedPlaces = [...dayData.places].sort((a, b) => (a.order || 0) - (b.order || 0));
+        for (const place of sortedPlaces) {
           const placeName = await fetchPlaceNameCached(place.placeType, place.placeId);
           let badgeClass = 'badge-attraction';
           if (place.placeType === 'Hotel') badgeClass = 'badge-hotel';

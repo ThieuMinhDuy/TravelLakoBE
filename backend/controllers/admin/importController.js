@@ -302,13 +302,13 @@ const importFromOSM = asyncHandler(async (req, res) => {
     const exists = await Restaurant.findOne({ name: item.name, city: cityId });
     if (!exists) {
       const cuisines = ['Ẩm thực Việt Nam', 'Đặc sản địa phương', 'Hải sản tươi sống', 'Món ăn gia đình'];
-      const priceRanges = ['$', '$$', '$$$'];
+      const prices = [50000, 80000, 100000, 150000, 200000, 300000, 500000];
       await Restaurant.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Restaurant'),
         images: getRandomImages('Restaurant', 2),
         cuisineType: cuisines[Math.floor(Math.random() * cuisines.length)],
-        priceRange: priceRanges[Math.floor(Math.random() * priceRanges.length)],
+        price: prices[Math.floor(Math.random() * prices.length)],
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
         numReviews: Math.floor(Math.random() * 25) + 5
       });
@@ -320,12 +320,12 @@ const importFromOSM = asyncHandler(async (req, res) => {
   for (const item of targetCafes) {
     const exists = await Cafe.findOne({ name: item.name, city: cityId });
     if (!exists) {
-      const priceRanges = ['$', '$$', '$$$'];
+      const prices = [20000, 30000, 45000, 60000, 80000, 100000];
       await Cafe.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Cafe'),
         images: getRandomImages('Cafe', 2),
-        priceRange: priceRanges[Math.floor(Math.random() * priceRanges.length)],
+        price: prices[Math.floor(Math.random() * prices.length)],
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
         numReviews: Math.floor(Math.random() * 25) + 5
       });

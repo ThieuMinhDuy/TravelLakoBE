@@ -80,8 +80,8 @@ const router = express.Router();
  *             type: string
  *         cuisineType:
  *           type: string
- *         priceRange:
- *           type: string
+ *         price:
+ *           type: number
  *         address:
  *           type: string
  *         coordinates:
@@ -108,8 +108,8 @@ const router = express.Router();
  *           type: array
  *           items:
  *             type: string
- *         priceRange:
- *           type: string
+ *         price:
+ *           type: number
  *         address:
  *           type: string
  *         coordinates:
@@ -224,11 +224,15 @@ router.get('/search', globalSearch);
  *           type: string
  *         description: Loại ẩm thực (chỉ cho restaurant)
  *       - in: query
- *         name: priceRange
+ *         name: minPrice
  *         schema:
- *           type: string
- *           enum: [$, $$, $$$]
- *         description: Khoảng phân khúc giá (cho restaurant, cafe)
+ *           type: number
+ *         description: Giá thấp nhất (cho restaurant, cafe)
+ *       - in: query
+ *         name: maxPrice
+ *         schema:
+ *           type: number
+ *         description: Giá cao nhất (cho restaurant, cafe)
  *     responses:
  *       200:
  *         description: Lấy danh sách thành công

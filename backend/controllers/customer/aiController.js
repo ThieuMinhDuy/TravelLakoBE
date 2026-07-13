@@ -22,7 +22,12 @@ const normalizeText = (text) => {
 // @route   POST /api/ai/suggest
 // @access  Private
 const generateAISuggestion = asyncHandler(async (req, res) => {
-  const { cityId, startDate, endDate, budget, preferences, notes } = req.body;
+  const { cityId, startDate, endDate, budget, preferences, notes, isParse } = req.body;
+
+  let chatRecord = null;
+  if (isParse && req.user) {
+    chatRecord = await Chat.findOne({ user: req.user._id });
+  }
 
   let targetCity = null;
   if (cityId) {
@@ -54,15 +59,29 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
     throw new Error(`Không tìm thấy thành phố nào tương thích. Các thành phố được hỗ trợ hiện tại: ${availableCityNames}`);
   }
 
-  // 1. Fetch top 10 places of each category in the city
-  const hotels = await Hotel.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-  const attractions = await Attraction.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-  const restaurants = await Restaurant.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-  const cafes = await Cafe.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+  // 1. Fetch places. If isParse is true, fetch all to make sure we can match whatever was chosen in chat.
+  let hotels, attractions, restaurants, cafes;
+  if (isParse) {
+    hotels = await Hotel.find({ city: targetCity._id }).lean();
+    attractions = await Attraction.find({ city: targetCity._id }).lean();
+    restaurants = await Restaurant.find({ city: targetCity._id }).lean();
+    cafes = await Cafe.find({ city: targetCity._id }).lean();
+  } else {
+    hotels = await Hotel.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+    attractions = await Attraction.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+    restaurants = await Restaurant.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+    cafes = await Cafe.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+  }
 
   // 2. Format places list for the AI prompt
   const formatPlaces = (list, type) => {
-    return list.map(p => `- [${type}] Tên: "${p.name}", ID: "${p._id}", Điểm đánh giá: ${p.rating || 5}/5, Chi tiết: "${p.description || ''}"${p.admissionFee !== undefined ? `, Vé vào: ${p.admissionFee}đ` : ''}${p.priceRange ? `, Giá: ${p.priceRange}` : ''}`).join('\n');
+    return list.map(p => {
+      let priceText = '';
+      if (p.pricePerNight !== undefined) priceText = `, Giá phòng: ${p.pricePerNight}đ/đêm`;
+      else if (p.admissionFee !== undefined) priceText = `, Vé vào: ${p.admissionFee}đ`;
+      else if (p.price !== undefined) priceText = `, Giá trung bình: ${p.price}đ`;
+      return `- [${type}] Tên: "${p.name}", ID: "${p._id}", Điểm đánh giá: ${p.rating || 5}/5, Chi tiết: "${p.description || ''}"${priceText}`;
+    }).join('\n');
   };
 
   const placesListText = [
@@ -77,8 +96,38 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
   const end = new Date(endDate || Date.now() + 2 * 24 * 60 * 60 * 1000); // Default 3 days
   const duration = Math.max(1, Math.ceil((end - start) / (24 * 60 * 60 * 1000)) + 1);
 
-  // 3. Construct System Prompt & User instructions
-  const systemPrompt = `Bạn là một trợ lý ảo thiết lập lịch trình du lịch thông minh cho ứng dụng TravelLako.
+  // 3. Construct Prompts based on mode
+  let systemPrompt = '';
+  let userPrompt = '';
+
+  if (isParse) {
+    let conversationText = '';
+    if (chatRecord) {
+      conversationText = chatRecord.messages.map(m => `${m.role === 'user' ? 'Khách hàng' : 'AI'}: ${m.parts?.[0]?.text || ''}`).join('\n');
+    }
+
+    systemPrompt = `Bạn là một trợ lý ảo phân tích lịch trình du lịch thông minh cho ứng dụng TravelLako.
+Nhiệm vụ của bạn là đọc và phân tích lịch trình du lịch dạng chữ (Markdown) được cung cấp bởi người dùng và trích xuất cấu trúc dữ liệu JSON chính xác khớp với hệ thống.
+
+DANH SÁCH ĐỊA ĐIỂM THỰC TẾ TRONG HỆ THỐNG:
+${placesListText}
+
+CÁC YÊU CẦU QUAN TRỌNG:
+1. Bạn phải đọc lịch trình chữ và đối chiếu tên các địa điểm xuất hiện trong lịch trình chữ với danh sách địa điểm thực tế của hệ thống ở trên để tìm ra đúng "placeId" và "placeType".
+   - Ví dụ: Nếu trong lịch trình chữ ghi "Khách sạn Golden Holiday", hãy tìm khách sạn có tên tương tự trong danh sách thực tế ở trên để lấy ra đúng ID của nó.
+   - Phân biệt rõ các loại placeType: 'Hotel', 'Attraction', 'Restaurant', 'Cafe'.
+2. Sắp xếp lại lịch trình theo đúng thứ tự các ngày (day 1, 2...) và thứ tự các địa điểm (order 0, 1, 2...) tương tự như trong văn bản lịch trình.
+3. Không tự ý thêm bớt hay chọn các địa điểm khác ngoài những gì có trong văn bản lịch trình chữ của người dùng.
+4. Trích xuất chính xác số tiền ngân sách mà người dùng mong muốn từ lịch sử cuộc trò chuyện dưới đây. 
+   - Tìm các cụm từ chỉ ngân sách (ví dụ: "ngân sách 4 triệu", "4tr", "4.000.000", "ngân sách 3 triệu"...) trong lịch sử chat để lấy giá trị số tương ứng (ví dụ: 4000000 hoặc 3000000) gán vào trường "estimatedTotalCost".
+   - Nếu không tìm thấy bất kỳ thông tin ngân sách nào cụ thể trong lịch sử chat, hãy dùng giá trị mặc định là 4000000.
+
+LỊCH SỬ CUỘC TRÒ CHUYỆN ĐỂ TRÍCH XUẤT NGÂN SÁCH:
+${conversationText}`;
+
+    userPrompt = `Dưới đây là nội dung lịch trình dạng chữ cần phân tích:\n${notes}`;
+  } else {
+    systemPrompt = `Bạn là một trợ lý ảo thiết lập lịch trình du lịch thông minh cho ứng dụng TravelLako.
 Nhiệm vụ của bạn là lập lịch trình du lịch cho người dùng tại thành phố "${targetCity.name}" trong vòng ${duration} ngày.
 Bạn CHỈ ĐƯỢC PHÉP chọn các địa điểm từ danh sách thực tế của hệ thống cung cấp dưới đây. TUYỆT ĐỐI không tự tạo ra tên địa điểm mới hoặc ID giả.
 Các địa điểm phải khớp chính xác thuộc tính "placeType" và "placeId" của chúng.
@@ -92,10 +141,11 @@ Quy tắc sắp xếp:
 - Đảm bảo lịch trình đáp ứng tốt nhất sở thích "${preferences || 'Tổng hợp'}" và phân khúc ngân sách "${budget || 'Trung bình'}".
 - Ước tính tổng chi phí toàn bộ chuyến đi "estimatedTotalCost" (bao gồm giá phòng khách sạn tham khảo, vé vào cửa các điểm du lịch, và chi phí ăn uống ước lượng cho ${duration} ngày).`;
 
-  const userPrompt = `Hãy thiết kế lịch trình ${duration} ngày tại thành phố ${targetCity.name}.
+    userPrompt = `Hãy thiết kế lịch trình ${duration} ngày tại thành phố ${targetCity.name}.
 Sở thích: ${preferences || 'Không có yêu cầu đặc biệt'}
 Ngân sách: ${budget || 'Trung bình'}
 Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
+  }
 
   // 4. Request Gemini API using direct REST endpoint
   const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -247,7 +297,13 @@ const chatWithAI = asyncHandler(async (req, res) => {
     const cafes = await Cafe.find({ city: targetCity._id }).lean();
 
     const formatPlaces = (list, type) => {
-      return list.map(p => `- [${type}] Tên: "${p.name}", Chi tiết: "${p.description || ''}"${p.admissionFee !== undefined ? `, Vé vào: ${p.admissionFee}đ` : ''}${p.priceRange ? `, Giá: ${p.priceRange}` : ''}`).join('\n');
+      return list.map(p => {
+        let priceText = '';
+        if (p.pricePerNight !== undefined) priceText = `, Giá phòng: ${p.pricePerNight}đ/đêm`;
+        else if (p.admissionFee !== undefined) priceText = `, Vé vào: ${p.admissionFee}đ`;
+        else if (p.price !== undefined) priceText = `, Giá trung bình: ${p.price}đ`;
+        return `- [${type}] Tên: "${p.name}", Chi tiết: "${p.description || ''}"${priceText}`;
+      }).join('\n');
     };
 
     const placesListText = [
@@ -304,6 +360,14 @@ QUY TẮC KHI LẬP LỊCH TRÌNH:
 - Nếu người dùng CHƯA cung cấp một trong hai thông tin này (Ngân sách hoặc Số ngày đi), bạn TUYỆT ĐỐI KHÔNG tự bịa ra thông tin mặc định hay lập lịch trình ngay. Thay vào đó, hãy lịch sự hỏi lại người dùng để xác nhận các thông tin còn thiếu này.
 - Chỉ khi người dùng đã cung cấp đủ cả thông tin về Ngân sách và Số ngày đi, bạn mới tiến hành gợi ý lịch trình chi tiết theo từng ngày (gồm Sáng, Chiều, Tối) dưới dạng Markdown.
 - Riêng Ngày bắt đầu chuyến đi không bắt buộc người dùng phải cung cấp, bạn không cần hỏi thông tin này.
+
+QUY TẮC HIỂN THỊ GIÁ TIỀN (BẮT BUỘC):
+- Khi gợi ý hay nhắc đến bất kỳ địa điểm nào trong câu trả lời (cho dù là gợi ý đơn lẻ hay khi lập lịch trình), bạn BẮT BUỘC phải ghi kèm giá tiền của địa điểm đó ngay bên cạnh tên địa điểm trong dấu ngoặc đơn. 
+- Định dạng hiển thị bắt buộc:
+  * Khách sạn: [Tên khách sạn] ([Giá phòng]đ/đêm) - Ví dụ: "Khách sạn Golden Holiday (1.200.000đ/đêm)".
+  * Điểm tham quan: [Tên điểm tham quan] ([Vé vào]đ) - Ví dụ: "Chùa Cầu (0đ)" hoặc "Nhà cổ Phùng Hưng (30.000đ)".
+  * Nhà hàng / Quán Cafe: [Tên địa điểm] ([Giá trung bình]đ) - Ví dụ: "Bánh mì Phượng (30.000đ)" hoặc "Nước Mót (15.000đ)".
+- Tuyệt đối không tự ý lược bỏ thông tin giá tiền này trong mọi trường hợp.
 
 Khi người dùng đã cung cấp đủ yêu cầu và bạn lập lịch trình, hãy phản hồi trực tiếp lịch trình chi tiết theo từng ngày ngay trong nội dung tin nhắn dưới dạng Markdown rõ ràng, thân thiện. Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.
 
