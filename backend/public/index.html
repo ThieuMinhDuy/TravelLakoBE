@@ -1595,6 +1595,52 @@
     let savedTripId = null;
     let aiChatHistory = [];
 
+    function parseJwt(token) {
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (e) {
+        return {};
+      }
+    }
+
+    function getTextHash(text) {
+      if (!text) return '';
+      let hash = 0;
+      for (let i = 0; i < text.length; i++) {
+        const char = text.charCodeAt(i);
+        hash = (hash << 5) - hash + char;
+        hash = hash & hash;
+      }
+      return hash.toString();
+    }
+
+    function checkIsTripSaved(hash) {
+      const token = getToken();
+      if (!token) return false;
+      const user = parseJwt(token);
+      const userId = user.id || user._id || 'guest';
+      const savedList = JSON.parse(localStorage.getItem(`saved_trips_${userId}`) || '[]');
+      return savedList.includes(hash);
+    }
+
+    function saveTripHashLocal(hash) {
+      const token = getToken();
+      if (!token) return;
+      const user = parseJwt(token);
+      const userId = user.id || user._id || 'guest';
+      const key = `saved_trips_${userId}`;
+      const savedList = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!savedList.includes(hash)) {
+        savedList.push(hash);
+        localStorage.setItem(key, JSON.stringify(savedList));
+      }
+    }
+
     // Helper to format raw markdown to beautiful HTML tags, cleaning up *, #, - characters
     function formatMarkdown(text) {
       if (!text) return '';
@@ -1688,13 +1734,25 @@
           
           let buttonHtml = '';
           if (isSuggestionResponse) {
-            buttonHtml = `
-              <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button class="btn" onclick="handleSaveChatTrip(this)" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
-                  💾 Lưu lịch trình này vào tài khoản
-                </button>
-              </div>
-            `;
+            const textHash = getTextHash(text);
+            const isSaved = checkIsTripSaved(textHash);
+            if (isSaved) {
+              buttonHtml = `
+                <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button class="btn" disabled style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--text-muted); border-color: var(--text-muted); color: rgba(255,255,255,0.6); cursor: not-allowed;">
+                    ✔️ Đã lưu lịch trình này vào tài khoản
+                  </button>
+                </div>
+              `;
+            } else {
+              buttonHtml = `
+                <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button class="btn" onclick="handleSaveChatTrip(this, '${textHash}')" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
+                    💾 Lưu lịch trình này vào tài khoản
+                  </button>
+                </div>
+              `;
+            }
           }
 
           const aiMsgHtml = `
@@ -1769,9 +1827,10 @@
           
           let buttonHtml = '';
           if (isSuggestionResponse) {
+            const textHash = getTextHash(data.reply);
             buttonHtml = `
               <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                <button class="btn" onclick="handleSaveChatTrip(this)" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
+                <button class="btn" onclick="handleSaveChatTrip(this, '${textHash}')" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
                   💾 Lưu lịch trình này vào tài khoản
                 </button>
               </div>
@@ -1816,7 +1875,7 @@
       return allMsgs.slice(-6).join(' ');
     }
 
-    async function handleSaveChatTrip(btn) {
+    async function handleSaveChatTrip(btn, hash) {
       const token = getToken();
       if (!token) {
         showToast('Vui lòng đăng nhập để lưu lịch trình!', 'error');
@@ -1829,6 +1888,9 @@
 
       try {
         const notes = getCombinedHistoryText();
+        const defaultStartDate = new Date();
+
+        // 1. Call AI suggest endpoint to parse structured JSON from chat text
         const resSuggest = await fetch('/api/ai/suggest', {
           method: 'POST',
           headers: {
@@ -1839,8 +1901,8 @@
             notes: notes,
             budget: 'Trung bình',
             preferences: 'Tổng hợp',
-            startDate: new Date().toISOString(),
-            endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString()
+            startDate: defaultStartDate.toISOString(),
+            endDate: new Date(defaultStartDate.getTime() + 2 * 24 * 60 * 60 * 1000).toISOString()
           })
         });
 
@@ -1849,6 +1911,11 @@
           throw new Error(data.message || 'Không thể đồng bộ hóa lịch trình thực tế.');
         }
 
+        // 2. Calculate end date based on duration returned by AI
+        const durationDays = data.schedule.length || 1;
+        const calculatedEndDate = new Date(defaultStartDate.getTime() + (durationDays - 1) * 24 * 60 * 60 * 1000);
+
+        // 3. Save trip using the parsed data (budget parsed by AI)
         const resSave = await fetch('/api/trips', {
           method: 'POST',
           headers: {
@@ -1858,8 +1925,8 @@
           body: JSON.stringify({
             title: data.suggestedTitle,
             city: data.city._id,
-            startDate: new Date().toISOString(),
-            endDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+            startDate: defaultStartDate.toISOString(),
+            endDate: calculatedEndDate.toISOString(),
             budget: data.estimatedTotalCost || 3000000,
             schedule: data.schedule
           })
@@ -1868,7 +1935,17 @@
         const saveResult = await resSave.json();
         if (resSave.ok) {
           showToast('Đã lưu chuyến đi thành công vào tài khoản của bạn!');
-          btn.textContent = '✅ Đã lưu thành công';
+          if (hash) {
+            saveTripHashLocal(hash);
+          }
+          
+          btn.textContent = '✔️ Đã lưu lịch trình này vào tài khoản';
+          btn.disabled = true;
+          btn.style.background = 'var(--text-muted)';
+          btn.style.borderColor = 'var(--text-muted)';
+          btn.style.color = 'rgba(255,255,255,0.6)';
+          btn.style.cursor = 'not-allowed';
+          btn.onclick = null;
           
           currentAISuggestion = data;
           savedTripId = saveResult._id;
@@ -1879,7 +1956,7 @@
           document.getElementById('ai-result-section').style.display = 'block';
           document.getElementById('ai-suggested-title').textContent = data.suggestedTitle;
           document.getElementById('ai-city-name').textContent = data.city.name;
-          document.getElementById('ai-estimated-cost').textContent = data.estimatedTotalCost ? data.estimatedTotalCost.toLocaleString('vi-VN') + ' VNĐ' : 'Chưa rõ';
+          document.getElementById('ai-estimated-cost').textContent = (data.estimatedTotalCost || 3000000).toLocaleString('vi-VN') + ' VNĐ';
           
           await renderAISchedule(data.schedule, 'ai-schedule-list');
           fetchUserTripsForOptimizer();
