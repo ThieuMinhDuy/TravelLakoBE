@@ -5,6 +5,7 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import Trip from '../../models/tripModel.js';
+import Chat from '../../models/chatModel.js';
 
 // Helper function to normalize text (remove Vietnamese accents and convert to lowercase)
 const normalizeText = (text) => {
@@ -199,8 +200,10 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
 // @desc    Conversational chat with Gemini AI
 // @route   POST /api/ai/chat
 // @access  Private
+// @route   POST /api/ai/chat
+// @access  Private
 const chatWithAI = asyncHandler(async (req, res) => {
-  const { message, history } = req.body;
+  const { message } = req.body;
 
   if (!message) {
     res.status(400);
@@ -213,10 +216,17 @@ const chatWithAI = asyncHandler(async (req, res) => {
     throw new Error('Gemini API key chưa được cấu hình ở file .env');
   }
 
-  // 1. Search for city in message or recent history
+  // 1. Fetch or create user's Chat document
+  let chatRecord = await Chat.findOne({ user: req.user._id });
+  if (!chatRecord) {
+    chatRecord = new Chat({ user: req.user._id, messages: [] });
+  }
+
+  // 2. Search for city in message or recent DB history to select database places
   let targetCity = null;
   const citiesList = await City.find({});
-  const allHistoryText = (history || []).map(h => h.parts?.[0]?.text || '').join(' ') + ' ' + message;
+  const dbHistoryText = chatRecord.messages.map(m => m.parts?.[0]?.text || '').join(' ');
+  const allHistoryText = dbHistoryText + ' ' + message;
   const normalizedText = normalizeText(allHistoryText);
 
   for (const city of citiesList) {
@@ -262,17 +272,15 @@ Nếu người dùng hỏi hoặc yêu cầu gợi ý địa điểm ở bất k
 
   const contents = [];
 
-  if (history && Array.isArray(history)) {
-    history.forEach(item => {
-      if (item.role && item.parts && Array.isArray(item.parts)) {
-        contents.push({
-          role: item.role === 'assistant' ? 'model' : item.role,
-          parts: item.parts.map(p => ({ text: p.text || '' }))
-        });
-      }
+  // Build the contents array from the DB history
+  chatRecord.messages.forEach(item => {
+    contents.push({
+      role: item.role === 'assistant' || item.role === 'model' ? 'model' : 'user',
+      parts: item.parts.map(p => ({ text: p.text || '' }))
     });
-  }
+  });
 
+  // Push the current user message
   contents.push({
     role: 'user',
     parts: [{ text: message }]
@@ -313,11 +321,37 @@ ${dbPlacesText}`
     }
 
     const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Save to database
+    chatRecord.messages.push({ role: 'user', parts: [{ text: message }] });
+    chatRecord.messages.push({ role: 'model', parts: [{ text: reply }] });
+    await chatRecord.save();
+
     res.status(200).json({ reply });
   } catch (error) {
     if (res.statusCode === 200) res.status(500);
     throw error;
   }
+});
+
+// @desc    Get chat history for current user
+// @route   GET /api/ai/chat
+// @access  Private
+const getChatHistory = asyncHandler(async (req, res) => {
+  const chat = await Chat.findOne({ user: req.user._id });
+  if (chat) {
+    res.json(chat.messages || []);
+  } else {
+    res.json([]);
+  }
+});
+
+// @desc    Clear chat history for current user
+// @route   DELETE /api/ai/chat
+// @access  Private
+const clearChatHistory = asyncHandler(async (req, res) => {
+  await Chat.deleteOne({ user: req.user._id });
+  res.json({ message: 'Đã xóa lịch sử cuộc trò chuyện.' });
 });
 
 // @desc    Optimize existing trip itinerary using AI based on location coordinates (Batch request)
@@ -538,5 +572,7 @@ Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đ
 export {
   generateAISuggestion,
   chatWithAI,
-  optimizeExistingTrip
+  optimizeExistingTrip,
+  getChatHistory,
+  clearChatHistory
 };

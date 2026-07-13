@@ -1032,12 +1032,27 @@
     <!-- Floating Chat Window -->
     <div class="ai-widget-window" id="ai-widget-window">
       <!-- Header -->
-      <div class="ai-widget-header">
+      <div class="ai-widget-header" style="position: relative;">
         <div class="ai-header-info">
           <span class="ai-header-status"></span>
           <strong style="font-size: 0.9rem;">TravelLako AI Assistant</strong>
         </div>
-        <button class="ai-widget-close" onclick="toggleAIWidget()">&times;</button>
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <button onclick="toggleWidgetActionMenu(event)" style="background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 1.1rem; padding: 0; line-height: 1; display: flex; align-items: center; justify-content: center; transition: color 0.2s ease; width: auto !important; margin-top: 0 !important;" onmouseover="this.style.color='var(--text-main)'" onmouseout="this.style.color='var(--text-muted)'" title="Tùy chọn thêm">
+            &bull;&bull;&bull;
+          </button>
+          <button class="ai-widget-close" onclick="toggleAIWidget()">&times;</button>
+        </div>
+
+        <!-- Dropdown action menu popup in header -->
+        <div id="ai-widget-action-menu" style="display: none; position: absolute; top: 48px; right: 0.75rem; background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 220px; z-index: 1000; padding: 0.35rem;">
+          <button class="menu-item-btn" onclick="triggerOptimizeWorkflow(event)" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); padding: 0.6rem 0.8rem; font-size: 0.8rem; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s; font-family: inherit;">
+            🚀 Tối ưu hóa lộ trình (GPS)
+          </button>
+          <button class="menu-item-btn" onclick="handleClearChatHistory(event)" style="width: 100%; text-align: left; background: none; border: none; color: #ef4444; padding: 0.6rem 0.8rem; font-size: 0.8rem; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s; font-family: inherit;">
+            🗑️ Xóa cuộc trò chuyện
+          </button>
+        </div>
       </div>
 
       <!-- Chat History -->
@@ -1053,18 +1068,8 @@
 
       <!-- Chat Input -->
       <div class="ai-widget-input-area">
-        <button onclick="toggleWidgetActionMenu(event)" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-main); font-weight: bold; font-size: 1.1rem; flex-shrink: 0; padding: 0 !important; margin: 0 !important;" title="Tùy chọn thêm">
-          &bull;&bull;&bull;
-        </button>
         <input type="text" id="chat-input" class="form-control" placeholder="Nhập tin nhắn..." onkeydown="if(event.key === 'Enter') handleSendChatMessage()" style="margin: 0; flex-grow: 1;">
         <button class="btn" onclick="handleSendChatMessage()" id="btn-send-chat" style="margin: 0; width: 65px; flex-shrink: 0;">Gửi</button>
-
-        <!-- Dropdown action menu popup -->
-        <div id="ai-widget-action-menu" style="display: none; position: absolute; bottom: 55px; left: 0.75rem; background: #1f2937; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 220px; z-index: 10; padding: 0.35rem;">
-          <button class="menu-item-btn" onclick="triggerOptimizeWorkflow(event)" style="width: 100%; text-align: left; background: none; border: none; color: var(--text-main); padding: 0.6rem 0.8rem; font-size: 0.8rem; cursor: pointer; border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; transition: background 0.2s; font-family: inherit;">
-            🚀 Tối ưu hóa lộ trình (GPS)
-          </button>
-        </div>
       </div>
     </div>
   </div>
@@ -1243,6 +1248,8 @@
           switchTab('profile');
           // Load profile details via GET profile API (to get complete details + stats)
           await fetchUserProfile();
+          // Load chat history from server database
+          loadChatHistoryFromServer();
         } else {
           // Nếu tài khoản chưa xác thực email, cho phép chuyển hướng sang OTP tab luôn
           if (data.message && data.message.includes('chưa được xác thực')) {
@@ -1274,7 +1281,8 @@
           handleLogout();
         }
       } catch (err) {
-        showToast('Lỗi kết nối máy chủ.', 'error');
+        console.error('fetchUserProfile error:', err);
+        showToast('Lỗi kết nối máy chủ (Profile).', 'error');
       }
     }
 
@@ -1325,13 +1333,19 @@
       });
 
       // Show AI tab button
-      document.getElementById('ai-tab-btn').style.display = 'block';
+      const aiTabBtn = document.getElementById('ai-tab-btn');
+      if (aiTabBtn) {
+        aiTabBtn.style.display = 'block';
+      }
 
       // Show admin tab if admin user
-      if (user.isAdmin) {
-        document.getElementById('admin-tab-btn').style.display = 'block';
-      } else {
-        document.getElementById('admin-tab-btn').style.display = 'none';
+      const adminTabBtn = document.getElementById('admin-tab-btn');
+      if (adminTabBtn) {
+        if (user.isAdmin) {
+          adminTabBtn.style.display = 'block';
+        } else {
+          adminTabBtn.style.display = 'none';
+        }
       }
     }
 
@@ -1456,15 +1470,29 @@
       localStorage.removeItem('token');
       showToast('Đã đăng xuất khỏi hệ thống.');
       
+      const aiTabBtn = document.getElementById('ai-tab-btn');
+      if (aiTabBtn) aiTabBtn.style.display = 'none';
+      const adminTabBtn = document.getElementById('admin-tab-btn');
+      if (adminTabBtn) adminTabBtn.style.display = 'none';
+      
       document.getElementById('profile-tab-btn').style.display = 'none';
-      document.getElementById('ai-tab-btn').style.display = 'none';
-      document.getElementById('admin-tab-btn').style.display = 'none';
       document.getElementById('verify-tab-btn').style.display = 'block';
       
       // Clear forms
       document.getElementById('form-login').reset();
       document.getElementById('form-register').reset();
       document.getElementById('form-verify').reset();
+      
+      // Reset AI chat history state and UI
+      aiChatHistory = [];
+      const chatMessagesContainer = document.getElementById('ai-chat-messages');
+      if (chatMessagesContainer) {
+        const welcomeMsg = chatMessagesContainer.firstElementChild;
+        chatMessagesContainer.innerHTML = '';
+        if (welcomeMsg) {
+          chatMessagesContainer.appendChild(welcomeMsg);
+        }
+      }
       
       switchTab('login');
     }
@@ -1610,6 +1638,79 @@
         }
       }
       return '';
+    }
+
+    async function loadChatHistoryFromServer() {
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const res = await fetch('/api/ai/chat', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          aiChatHistory = await res.json();
+          renderChatHistory();
+        }
+      } catch (err) {
+        console.error('Lỗi khi tải lịch sử chat:', err);
+      }
+    }
+
+    function renderChatHistory() {
+      const chatMessagesContainer = document.getElementById('ai-chat-messages');
+      if (!chatMessagesContainer) return;
+
+      // Keep only the welcoming message (first child)
+      const welcomeMsg = chatMessagesContainer.firstElementChild;
+      chatMessagesContainer.innerHTML = '';
+      if (welcomeMsg) {
+        chatMessagesContainer.appendChild(welcomeMsg);
+      }
+
+      aiChatHistory.forEach(msg => {
+        const text = msg.parts?.[0]?.text || '';
+        if (msg.role === 'user') {
+          const userMsgHtml = `
+            <div class="chat-msg user-msg" style="display: flex; flex-direction: column; align-items: flex-end; max-width: 80%; align-self: flex-end;">
+              <span style="font-size: 0.7rem; color: var(--accent); font-weight: 600; margin-bottom: 0.2rem;">Bạn</span>
+              <div style="background: linear-gradient(135deg, var(--primary), var(--accent)); padding: 0.6rem 0.9rem; border-radius: 12px 4px 12px 12px; font-size: 0.85rem; line-height: 1.4; color: #fff;">
+                ${text}
+              </div>
+            </div>
+          `;
+          chatMessagesContainer.insertAdjacentHTML('beforeend', userMsgHtml);
+        } else {
+          const formattedReply = formatMarkdown(text);
+          const isSuggestionResponse = (text.toLowerCase().includes('ngày 1') || text.toLowerCase().includes('ngày 2')) &&
+                                       (text.toLowerCase().includes('sáng:') || text.toLowerCase().includes('trưa:') || text.toLowerCase().includes('chiều:') || text.toLowerCase().includes('tối:') ||
+                                        text.toLowerCase().includes('sáng :') || text.toLowerCase().includes('trưa :') || text.toLowerCase().includes('chiều :') || text.toLowerCase().includes('tối :'));
+          
+          let buttonHtml = '';
+          if (isSuggestionResponse) {
+            buttonHtml = `
+              <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                <button class="btn" onclick="handleSaveChatTrip(this)" style="font-size: 0.75rem; padding: 0.35rem 0.75rem; width: auto; margin-top: 0; background: var(--success); border-color: var(--success); color: #fff;">
+                  💾 Lưu lịch trình này vào tài khoản
+                </button>
+              </div>
+            `;
+          }
+
+          const aiMsgHtml = `
+            <div class="chat-msg ai-msg" style="display: flex; flex-direction: column; align-items: flex-start; max-width: 85%;">
+              <span style="font-size: 0.7rem; color: var(--primary); font-weight: 600; margin-bottom: 0.2rem;">TravelLako AI</span>
+              <div style="background: rgba(255, 255, 255, 0.05); padding: 0.75rem 1rem; border-radius: 4px 16px 16px 16px; font-size: 0.85rem; line-height: 1.5; color: var(--text-main); width: 100%;">
+                <div>${formattedReply}</div>
+                ${buttonHtml}
+              </div>
+            </div>
+          `;
+          chatMessagesContainer.insertAdjacentHTML('beforeend', aiMsgHtml);
+        }
+      });
+
+      chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
     }
 
     async function handleSendChatMessage() {
@@ -1800,6 +1901,43 @@
         menu.style.display = 'block';
       } else {
         menu.style.display = 'none';
+      }
+    }
+
+    async function handleClearChatHistory(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('ai-widget-action-menu');
+      if (menu) menu.style.display = 'none';
+
+      if (!confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện này không?')) return;
+
+      const token = getToken();
+      if (!token) return;
+
+      try {
+        const res = await fetch('/api/ai/chat', {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          showToast('Đã xóa lịch sử trò chuyện thành công!');
+          aiChatHistory = [];
+          
+          // Reset chat messages container UI to only keep the welcoming message
+          const chatMessagesContainer = document.getElementById('ai-chat-messages');
+          if (chatMessagesContainer) {
+            const welcomeMsg = chatMessagesContainer.firstElementChild;
+            chatMessagesContainer.innerHTML = '';
+            if (welcomeMsg) {
+              chatMessagesContainer.appendChild(welcomeMsg);
+            }
+          }
+        } else {
+          const data = await res.json();
+          showToast(data.message || 'Xóa lịch sử trò chuyện thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ khi xóa lịch sử.', 'error');
       }
     }
 
@@ -2303,6 +2441,7 @@
         document.getElementById('profile-tab-btn').style.display = 'block';
         switchTab('profile');
         fetchUserProfile();
+        loadChatHistoryFromServer();
       }
 
       // Đăng ký bộ lắng nghe gợi ý tự động cho ô nhập tên thành phố

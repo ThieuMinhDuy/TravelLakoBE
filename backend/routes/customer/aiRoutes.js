@@ -2,7 +2,9 @@ import express from 'express';
 import {
   generateAISuggestion,
   chatWithAI,
-  optimizeExistingTrip
+  optimizeExistingTrip,
+  getChatHistory,
+  clearChatHistory
 } from '../../controllers/customer/aiController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -67,8 +69,62 @@ const router = express.Router();
  *         description: "Chưa đăng nhập"
  *       429:
  *         description: "AI vượt quá giới hạn yêu cầu (Quota Limit)"
+ *   get:
+ *     summary: "Tải lịch sử trò chuyện của người dùng hiện tại"
+ *     description: "Lấy danh sách các tin nhắn đã trò chuyện giữa người dùng và AI được lưu trong cơ sở dữ liệu."
+ *     tags: [AI Assistant]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: "Danh sách lịch sử tin nhắn"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   role:
+ *                     type: string
+ *                     enum: [user, model]
+ *                   parts:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         text:
+ *                           type: string
+ *       401:
+ *         description: "Chưa đăng nhập"
+ *       500:
+ *         description: "Lỗi server"
+ *   delete:
+ *     summary: "Xóa toàn bộ lịch sử trò chuyện của người dùng hiện tại"
+ *     description: "Xóa vĩnh viễn tài liệu lưu trữ cuộc trò chuyện của người dùng khỏi cơ sở dữ liệu."
+ *     tags: [AI Assistant]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: "Xóa lịch sử thành công"
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Đã xóa lịch sử cuộc trò chuyện."
+ *       401:
+ *         description: "Chưa đăng nhập"
+ *       500:
+ *         description: "Lỗi server"
  */
-router.post('/chat', protect, chatWithAI);
+router.route('/chat')
+  .post(protect, chatWithAI)
+  .get(protect, getChatHistory)
+  .delete(protect, clearChatHistory);
 
 /**
  * @swagger
