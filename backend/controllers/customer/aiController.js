@@ -103,7 +103,7 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
     throw new Error('Hệ thống chưa cấu hình API Key cho Trợ lý AI.');
   }
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`;
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`;
 
   const requestBody = {
     contents: [
@@ -213,7 +213,7 @@ const chatWithAI = asyncHandler(async (req, res) => {
     throw new Error('Gemini API key chưa được cấu hình ở file .env');
   }
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`;
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`;
 
   const contents = [];
 
@@ -241,7 +241,7 @@ const chatWithAI = asyncHandler(async (req, res) => {
           text: `Bạn là một trợ lý du lịch ảo thân thiện tên là TravelLako.
 Nhiệm vụ của bạn là trò chuyện, giải đáp thắc mắc và gợi ý các địa điểm du lịch, khách sạn, ẩm thực, quán cafe... cho người dùng.
 Hãy trả lời một cách tự nhiên, lịch sự bằng Tiếng Việt.
-Khi người dùng muốn tạo một lịch trình chi tiết cụ thể, hãy hướng dẫn họ hoặc gợi ý họ nhấn nút "Sinh lịch trình thông minh" trên giao diện để hệ thống có thể tạo lịch trình có cấu trúc lưu vào tài khoản.`
+Khi người dùng yêu cầu lập lịch trình du lịch (ví dụ sau khi cung cấp số ngày đi, ngân sách, sở thích...), bạn hãy lập và phản hồi trực tiếp lịch trình chi tiết theo từng ngày (gồm Sáng, Chiều, Tối) ngay trong nội dung tin nhắn chat dưới dạng Markdown rõ ràng, thân thiện. Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.`
         }
       ]
     }
@@ -357,7 +357,7 @@ ${inputDaysText}`;
   const userPrompt = `Hãy tối ưu hóa thứ tự di chuyển cho lịch trình các ngày trên.
 Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đường di chuyển ngắn nhất.'}`;
 
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`;
+  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`;
 
   const requestBody = {
     contents: [
@@ -472,9 +472,13 @@ Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đ
       }
     }
 
-    trip.schedule = finalSchedule;
-    const updatedTrip = await trip.save();
-    res.status(200).json(updatedTrip);
+    if (req.body.preview) {
+      res.status(200).json({ _id: trip._id, title: trip.title, city: trip.city, schedule: finalSchedule, preview: true });
+    } else {
+      trip.schedule = finalSchedule;
+      const updatedTrip = await trip.save();
+      res.status(200).json(updatedTrip);
+    }
 
   } catch (err) {
     if (res.statusCode === 200) res.status(500);
