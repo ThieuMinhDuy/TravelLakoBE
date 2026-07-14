@@ -438,6 +438,13 @@ const optimizeExistingTrip = asyncHandler(async (req, res) => {
     throw new Error('Chuyến đi không tồn tại hoặc bạn không có quyền chỉnh sửa.');
   }
 
+  // If frontend already has optimizedSchedule, save it directly to avoid double Gemini calls
+  if (req.body.preview === false && req.body.optimizedSchedule) {
+    trip.schedule = req.body.optimizedSchedule;
+    const updatedTrip = await trip.save();
+    return res.status(200).json(updatedTrip);
+  }
+
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) {
     res.status(500);

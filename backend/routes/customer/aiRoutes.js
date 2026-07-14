@@ -167,8 +167,12 @@ router.route('/chat')
  *                 example: "Biển, ngắm cảnh hoàng hôn, ăn hải sản"
  *               notes:
  *                 type: string
- *                 description: "Lời nhắn/yêu cầu thêm từ người dùng (hoặc lời nhắn chứa tên thành phố tự phát hiện)"
+ *                 description: "Lời nhắn/yêu cầu thêm từ người dùng (hoặc lời nhắn chứa tên thành phố tự phát hiện, hoặc văn bản lịch trình chữ cần phân tích)"
  *                 example: "Tôi muốn đi du lịch Phú Quốc vào tuần tới"
+ *               isParse:
+ *                 type: boolean
+ *                 description: "Cờ xác định chế độ: true nếu là phân tích lịch trình dạng chữ từ chat, false nếu là sinh mới tự động"
+ *                 example: false
  *     responses:
  *       200:
  *         description: "Gợi ý lịch trình thành công dưới dạng JSON chuẩn khớp với Trip schema"
@@ -256,6 +260,15 @@ router.post('/suggest', protect, generateAISuggestion);
  *                 type: string
  *                 description: "Yêu cầu tối ưu hóa đặc biệt từ người dùng"
  *                 example: "Hãy sắp xếp các quán cafe vào buổi sáng nhé"
+ *               preview:
+ *                 type: boolean
+ *                 description: "Cờ xác định chế độ xem trước (true) hay lưu thực tế vào DB (false)"
+ *                 example: true
+ *               optimizedSchedule:
+ *                 type: array
+ *                 description: "Lịch trình đã tối ưu (được cache từ bản xem trước) dùng để lưu trực tiếp vào DB khi preview=false"
+ *                 items:
+ *                   type: object
  *     responses:
  *       200:
  *         description: "Tối ưu lịch trình thành công và trả về thông tin chuyến đi đã cập nhật"

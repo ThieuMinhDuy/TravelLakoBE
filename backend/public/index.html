@@ -1595,6 +1595,7 @@
     let savedTripId = null;
     let aiChatHistory = [];
     let chatItineraries = {};
+    let optimizedSchedules = {};
 
     function parseJwt(token) {
       try {
@@ -2152,6 +2153,9 @@
           showToast('Đã sinh bản xem trước lộ trình tối ưu!');
           btnEl.textContent = '✅ Đã tối ưu';
 
+          // Cache the optimized schedule to guarantee consistency upon saving
+          optimizedSchedules[tripId] = data.schedule;
+
           const chatMessagesContainer = document.getElementById('ai-chat-messages');
           
           // Generate beautiful human-readable markdown
@@ -2204,13 +2208,14 @@
 
       try {
         const notes = decodeURIComponent(encodedNotes);
+        const optimizedSchedule = optimizedSchedules[tripId];
         const res = await fetch(`/api/ai/optimize/${tripId}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
           },
-          body: JSON.stringify({ notes, preview: false })
+          body: JSON.stringify({ notes, preview: false, optimizedSchedule })
         });
 
         if (res.ok) {
