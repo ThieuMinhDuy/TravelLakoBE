@@ -8,7 +8,8 @@ import {
   removePlaceFromSchedule,
   reorderSchedulePlaces,
   checkInPlace,
-  updateTripDiary
+  updateTripDiary,
+  updateTripMetadata
 } from '../../controllers/customer/tripController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
@@ -179,6 +180,7 @@ router.route('/')
  */
 router.route('/:id')
   .get(protect, getTripById)
+  .put(protect, updateTripMetadata)
   .delete(protect, deleteTrip);
 
 /**

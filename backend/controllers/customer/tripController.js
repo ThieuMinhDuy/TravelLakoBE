@@ -428,6 +428,35 @@ const updateTripDiary = asyncHandler(async (req, res) => {
   res.json(trip);
 });
 
+// @desc    Update trip metadata (Title, Budget)
+// @route   PUT /api/trips/:id
+// @access  Private
+const updateTripMetadata = asyncHandler(async (req, res) => {
+  const { title, budget } = req.body;
+
+  const trip = await Trip.findById(req.params.id);
+  if (!trip) {
+    res.status(404);
+    throw new Error('Trip not found');
+  }
+
+  // Check ownership
+  if (trip.user.toString() !== req.user._id.toString()) {
+    res.status(401);
+    throw new Error('Not authorized to modify this trip');
+  }
+
+  if (title !== undefined) {
+    trip.title = title;
+  }
+  if (budget !== undefined) {
+    trip.budget = Number(budget) || 0;
+  }
+
+  const updatedTrip = await trip.save();
+  res.json(updatedTrip);
+});
+
 export {
   createTrip,
   getMyTrips,
@@ -437,5 +466,6 @@ export {
   removePlaceFromSchedule,
   reorderSchedulePlaces,
   checkInPlace,
-  updateTripDiary
+  updateTripDiary,
+  updateTripMetadata
 };

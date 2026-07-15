@@ -481,6 +481,104 @@
       line-height: 1.3;
     }
 
+    /* Drag & Drop styles */
+    .place-item {
+      cursor: grab;
+      user-select: none;
+      transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+    }
+    .place-item:active {
+      cursor: grabbing;
+    }
+    .place-item.dragging {
+      opacity: 0.45;
+      background: rgba(139, 92, 246, 0.15) !important;
+      border: 1px dashed var(--primary) !important;
+      transform: scale(0.97);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+    .places-list.drag-over {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 10px;
+      border: 1px dashed rgba(139, 92, 246, 0.3);
+      padding: 0.25rem;
+    }
+
+    /* CSS cho Danh sách Chuyến đi */
+    .trip-sect-title {
+      font-family: var(--font-title);
+      font-size: 1.1rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--primary);
+      border-left: 3px solid var(--accent);
+      padding-left: 8px;
+    }
+    .trips-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    @media (min-width: 600px) {
+      .trips-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    .trip-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    .trip-card:hover {
+      transform: translateY(-2px);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1);
+    }
+    .trip-card.upcoming {
+      border-left: 4px solid var(--accent);
+    }
+    .trip-card.ongoing {
+      border-left: 4px solid var(--success);
+    }
+    .trip-card.past {
+      border-left: 4px solid var(--text-muted);
+      opacity: 0.8;
+    }
+    .trip-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+      gap: 0.5rem;
+    }
+    .trip-card-header h4 {
+      margin: 0;
+      font-size: 1rem;
+      color: var(--text-main);
+      font-family: var(--font-title);
+    }
+    .trip-city-badge {
+      font-size: 0.75rem;
+      background: rgba(139, 92, 246, 0.1);
+      color: var(--accent);
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      white-space: nowrap;
+      border: 1px solid rgba(139, 92, 246, 0.15);
+    }
+    .trip-card-body p {
+      margin: 0.35rem 0 0 0;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
     /* AI Split Layout */
     .ai-layout {
       display: grid;
@@ -715,6 +813,8 @@
       <button class="tab-btn" onclick="switchTab('register')">Đăng ký</button>
       <button class="tab-btn" id="verify-tab-btn" onclick="switchTab('verify')">Xác thực OTP</button>
       <button class="tab-btn" id="profile-tab-btn" style="display: none;" onclick="switchTab('profile')">Hồ sơ</button>
+      <button class="tab-btn" id="trips-tab-btn" style="display: none;" onclick="switchTab('trips')">Chuyến đi của tôi</button>
+      <button class="tab-btn" id="ai-tab-btn" style="display: none;" onclick="switchTab('ai')">Trợ lý AI</button>
       <button class="tab-btn" id="admin-tab-btn" style="display: none;" onclick="switchTab('admin')">Import Dữ Liệu</button>
     </div>
 
@@ -904,6 +1004,75 @@
         <button type="submit" class="btn">Lưu cập nhật</button>
         <button type="button" class="btn btn-secondary" onclick="handleLogout()">Đăng xuất</button>
       </form>
+
+      <div class="divider"></div>
+
+      <h2>🔑 Đổi mật khẩu</h2>
+      <form id="form-change-password" onsubmit="handleChangePassword(event)">
+        <div class="form-group">
+          <label for="change-new-password">Mật khẩu mới</label>
+          <input type="password" id="change-new-password" class="form-control" placeholder="Tối thiểu 6 ký tự, 1 chữ hoa, 1 chữ thường, 1 số" required>
+        </div>
+        <div class="form-group">
+          <label for="change-confirm-password">Xác nhận mật khẩu mới</label>
+          <input type="password" id="change-confirm-password" class="form-control" placeholder="Xác nhận mật khẩu mới" required>
+        </div>
+        <button type="submit" class="btn">Cập nhật mật khẩu</button>
+      </form>
+    </div>
+
+    <!-- 5. Pane Chuyến đi của tôi -->
+    <div class="form-pane" id="pane-trips">
+      <h2>✈️ Chuyến đi của tôi</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.5rem;">
+        Quản lý các chuyến đi đã lên kế hoạch và chỉnh sửa lịch trình của bạn.
+      </p>
+
+      <!-- Danh sách chuyến đi -->
+      <div id="trips-list-container">
+        <!-- Danh sách chuyến đi sẽ được load tự động tại đây -->
+      </div>
+
+      <!-- Chi tiết và chỉnh sửa lịch trình chuyến đi -->
+      <div id="trip-detail-section" style="display: none; margin-top: 2rem; padding: 1.5rem; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px;">
+        <!-- Tiêu đề chuyến đi (Dạng xem tĩnh) -->
+        <div id="detail-trip-header-view" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h3 id="detail-trip-title" style="color: var(--accent); margin: 0; font-family: var(--font-title);">Chi tiết chuyến đi</h3>
+          <button class="btn btn-secondary" style="width: auto; margin: 0; padding: 0.5rem 1rem;" onclick="closeTripDetail()">Đóng</button>
+        </div>
+
+        <!-- Tiêu đề chuyến đi (Dạng chỉnh sửa) -->
+        <div id="detail-trip-header-edit" style="display: none; flex-direction: column; gap: 0.75rem; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 1rem;">
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <div style="flex: 2; min-width: 200px;">
+              <label style="font-size: 0.75rem; color: var(--primary); display: block; margin-bottom: 0.25rem; font-weight: 600;">Tên chuyến đi mới</label>
+              <input type="text" id="edit-trip-title-input" class="form-control" style="margin: 0;" placeholder="Nhập tên chuyến đi mới">
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <label style="font-size: 0.75rem; color: var(--primary); display: block; margin-bottom: 0.25rem; font-weight: 600;">Ngân sách (VNĐ)</label>
+              <input type="number" id="edit-trip-budget-input" class="form-control" style="margin: 0;" placeholder="Ngân sách">
+            </div>
+          </div>
+        </div>
+
+        <p id="detail-trip-info" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem; border-bottom: 1px solid rgba(255, 255, 255, 0.06); padding-bottom: 0.75rem;"></p>
+
+        <!-- Nút hành động: Chỉnh sửa & Xóa -->
+        <div id="trip-action-buttons" style="display: flex; gap: 1rem; margin-bottom: 1.5rem;">
+          <button id="btn-edit-trip" class="btn" style="margin: 0; flex: 1;" onclick="enableTripEditMode()">✏️ Chỉnh sửa chuyến đi</button>
+          <button id="btn-delete-trip" class="btn btn-secondary" style="margin: 0; flex: 1; border-color: var(--error); color: var(--error);" onclick="confirmDeleteTrip()">🗑️ Xóa chuyến đi</button>
+        </div>
+
+        <!-- Hướng dẫn kéo thả chỉnh sửa -->
+        <div id="edit-instructions" style="display: none; background: rgba(139, 92, 246, 0.1); border: 1px dashed var(--primary); padding: 0.75rem 1rem; border-radius: 10px; font-size: 0.85rem; color: var(--text-main); margin-bottom: 1.5rem; line-height: 1.4;">
+          💡 <strong>Chế độ Chỉnh sửa đang bật:</strong> Bạn có thể kéo thả các địa điểm để sắp xếp lại thứ tự di chuyển trong cùng một ngày.
+        </div>
+
+        <!-- Timeline lịch trình -->
+        <div id="detail-trip-schedule"></div>
+
+        <button id="btn-save-edited-trip" class="btn" style="display: none; margin-top: 1.5rem;" onclick="saveEditedTrip()">💾 Hoàn tất chỉnh sửa</button>
+      </div>
     </div>
 
     <!-- 5.5. Pane Trợ lý AI -->
@@ -1113,6 +1282,8 @@
         loadVietnamCitiesList();
       } else if (tabName === 'ai') {
         fetchUserTripsForOptimizer();
+      } else if (tabName === 'trips') {
+        fetchUserTripsList();
       }
     }
 
@@ -1332,10 +1503,14 @@
         radio.checked = user.favoriteBudget === radio.value;
       });
 
-      // Show AI tab button
+      // Show AI & Trips tab buttons
       const aiTabBtn = document.getElementById('ai-tab-btn');
       if (aiTabBtn) {
         aiTabBtn.style.display = 'block';
+      }
+      const tripsTabBtn = document.getElementById('trips-tab-btn');
+      if (tripsTabBtn) {
+        tripsTabBtn.style.display = 'block';
       }
 
       // Show admin tab if admin user
@@ -1395,6 +1570,52 @@
           await fetchUserProfile();
         } else {
           showToast(data.message || 'Cập nhật thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // 6.5. Handle Change Password
+    async function handleChangePassword(event) {
+      event.preventDefault();
+      const token = getToken();
+      if (!token) {
+        showToast('Vui lòng đăng nhập để đổi mật khẩu!', 'error');
+        return;
+      }
+
+      const newPassword = document.getElementById('change-new-password').value;
+      const confirmPassword = document.getElementById('change-confirm-password').value;
+
+      if (newPassword !== confirmPassword) {
+        showToast('Mật khẩu mới và xác nhận mật khẩu không khớp!', 'error');
+        return;
+      }
+
+      // Enforce strong password validation (at least 6 characters, 1 uppercase, 1 lowercase, 1 digit)
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        showToast('Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/auth/profile', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ password: newPassword })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast('Thay đổi mật khẩu thành công!');
+          document.getElementById('form-change-password').reset();
+        } else {
+          showToast(data.message || 'Thay đổi mật khẩu thất bại.', 'error');
         }
       } catch (err) {
         showToast('Lỗi kết nối máy chủ.', 'error');
@@ -1472,6 +1693,8 @@
       
       const aiTabBtn = document.getElementById('ai-tab-btn');
       if (aiTabBtn) aiTabBtn.style.display = 'none';
+      const tripsTabBtn = document.getElementById('trips-tab-btn');
+      if (tripsTabBtn) tripsTabBtn.style.display = 'none';
       const adminTabBtn = document.getElementById('admin-tab-btn');
       if (adminTabBtn) adminTabBtn.style.display = 'none';
       
@@ -2370,24 +2593,37 @@
             <div class="day-title">
               <span>📅 Ngày ${dayData.day}</span>
             </div>
-            <div class="places-list">
+            <div class="places-list" data-day="${dayData.day}" data-container="${containerId}">
         `;
 
         const sortedPlaces = [...dayData.places].sort((a, b) => (a.order || 0) - (b.order || 0));
-        for (const place of sortedPlaces) {
+        for (let idx = 0; idx < sortedPlaces.length; idx++) {
+          const place = sortedPlaces[idx];
           const placeName = await fetchPlaceNameCached(place.placeType, place.placeId);
           let badgeClass = 'badge-attraction';
           if (place.placeType === 'Hotel') badgeClass = 'badge-hotel';
           else if (place.placeType === 'Restaurant') badgeClass = 'badge-restaurant';
           else if (place.placeType === 'Cafe') badgeClass = 'badge-cafe';
 
+          let deleteBtnHtml = '';
+          if (containerId === 'detail-trip-schedule' && isEditingTrip) {
+            deleteBtnHtml = `
+              <button onclick="handleDeletePlaceClick(event, '${place._id}')" class="btn btn-secondary" style="width: auto; margin: 0; padding: 0.25rem 0.5rem; font-size: 0.8rem; border-color: var(--error); color: var(--error);">
+                🗑️
+              </button>
+            `;
+          }
+
           html += `
-            <div class="place-item">
-              <span class="place-badge ${badgeClass}">${place.placeType}</span>
-              <div class="place-details">
-                <span class="place-name">${placeName}</span>
-                <span class="place-note">💡 ${place.note}</span>
+            <div class="place-item" draggable="true" data-day="${dayData.day}" data-idx="${idx}" data-id="${place._id || place.placeId}" data-container="${containerId}" style="display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; width: 100%;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+                <span class="place-badge ${badgeClass}">${place.placeType}</span>
+                <div class="place-details">
+                  <span class="place-name">${placeName}</span>
+                  <span class="place-note">💡 ${place.note || ''}</span>
+                </div>
               </div>
+              ${deleteBtnHtml}
             </div>
           `;
         }
@@ -2403,6 +2639,10 @@
 
     async function handleSaveTrip() {
       if (!currentAISuggestion) return;
+      if (savedTripId) {
+        showToast('Chuyến đi này đã được lưu vào tài khoản rồi!', 'warning');
+        return;
+      }
       const token = getToken();
 
       const btnSave = document.getElementById('btn-save-trip');
@@ -2430,7 +2670,13 @@
         if (res.ok) {
           showToast('Đã lưu chuyến đi thành công vào tài khoản của bạn!');
           savedTripId = data._id;
+          
+          // Cập nhật lại currentAISuggestion với dữ liệu từ database (đã có ObjectID _id)
+          currentAISuggestion = data;
+          await renderAISchedule(currentAISuggestion.schedule, 'ai-schedule-list');
+          
           btnSave.textContent = '✅ Đã lưu vào tài khoản';
+          btnSave.disabled = true;
           
           // Refresh trip optimizer selector to include the newly saved trip
           fetchUserTripsForOptimizer();
@@ -2521,6 +2767,497 @@
         btnOptimize.textContent = originalText;
       }
     }
+
+    // --- MY TRIPS TAB IMPLEMENTATION ---
+    let allUserTrips = [];
+    let selectedTrip = null;
+    let isEditingTrip = false;
+
+    async function fetchUserTripsList() {
+      const token = getToken();
+      if (!token) return;
+      
+      const container = document.getElementById('trips-list-container');
+      container.innerHTML = '⏳ Đang tải danh sách chuyến đi...';
+      document.getElementById('trip-detail-section').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/trips', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          allUserTrips = data;
+          
+          let html = '';
+          
+          const renderSection = (title, list, statusClass) => {
+            if (!list || list.length === 0) return '';
+            let sectHtml = `<h3 class="trip-sect-title">${title} (${list.length})</h3><div class="trips-grid">`;
+            list.forEach(t => {
+              const startD = new Date(t.startDate).toLocaleDateString('vi-VN');
+              const endD = new Date(t.endDate).toLocaleDateString('vi-VN');
+              const cityName = t.city ? t.city.name : 'Chưa rõ';
+              sectHtml += `
+                <div class="trip-card ${statusClass}" onclick="viewTripDetail('${t._id}')">
+                  <div class="trip-card-header">
+                    <h4>${t.title}</h4>
+                    <span class="trip-city-badge">📍 ${cityName}</span>
+                  </div>
+                  <div class="trip-card-body">
+                    <p>📅 ${startD} - ${endD}</p>
+                    <p>💰 Ngân sách: ${(t.budget || 0).toLocaleString('vi-VN')} VNĐ</p>
+                  </div>
+                </div>
+              `;
+            });
+            sectHtml += `</div>`;
+            return sectHtml;
+          };
+
+          html += renderSection('✈️ Chuyến đi sắp tới', data.upcoming || [], 'upcoming');
+          html += renderSection('🚗 Chuyến đi đang diễn ra', data.ongoing || [], 'ongoing');
+          html += renderSection('📜 Lịch sử chuyến đi', data.past || [], 'past');
+
+          if (!html) {
+            html = '<p style="text-align: center; color: var(--text-muted); padding: 2rem;">Bạn chưa có chuyến đi nào. Hãy sử dụng Trợ lý AI để lên lịch trình nhé!</p>';
+          }
+
+          container.innerHTML = html;
+        } else {
+          container.innerHTML = '<p class="error-text">Không thể tải danh sách chuyến đi.</p>';
+        }
+      } catch (e) {
+        console.error(e);
+        container.innerHTML = '<p class="error-text">Lỗi kết nối máy chủ.</p>';
+      }
+    }
+
+    async function viewTripDetail(tripId) {
+      const token = getToken();
+      if (!token) return;
+
+      const detailSection = document.getElementById('trip-detail-section');
+      const scheduleContainer = document.getElementById('detail-trip-schedule');
+      
+      detailSection.style.display = 'block';
+      scheduleContainer.innerHTML = '⏳ Đang tải chi tiết lịch trình...';
+      
+      isEditingTrip = false;
+      document.getElementById('edit-instructions').style.display = 'none';
+      document.getElementById('btn-save-edited-trip').style.display = 'none';
+      document.getElementById('btn-edit-trip').textContent = '✏️ Chỉnh sửa chuyến đi';
+      document.getElementById('btn-edit-trip').style.display = 'block';
+
+      try {
+        const res = await fetch(`/api/trips/${tripId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          selectedTrip = await res.json();
+          
+          document.getElementById('detail-trip-title').textContent = selectedTrip.title;
+          const startD = new Date(selectedTrip.startDate).toLocaleDateString('vi-VN');
+          const endD = new Date(selectedTrip.endDate).toLocaleDateString('vi-VN');
+          document.getElementById('detail-trip-info').innerHTML = `
+            📍 Thành phố: <strong>${selectedTrip.city ? selectedTrip.city.name : 'Chưa rõ'}</strong> | 
+            📅 Thời gian: <strong>${startD} - ${endD}</strong> | 
+            💰 Ngân sách: <strong>${(selectedTrip.budget || 0).toLocaleString('vi-VN')} VNĐ</strong>
+          `;
+
+          // Check if edit is allowed (only upcoming or ongoing)
+          const now = new Date();
+          const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+          const tripEnd = new Date(selectedTrip.endDate);
+          const tripEndUTC = new Date(Date.UTC(tripEnd.getUTCFullYear(), tripEnd.getUTCMonth(), tripEnd.getUTCDate()));
+          
+          if (today > tripEndUTC) {
+            document.getElementById('btn-edit-trip').style.display = 'none';
+          }
+
+          await renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+          detailSection.scrollIntoView({ behavior: 'smooth' });
+        } else {
+          scheduleContainer.innerHTML = '<p class="error-text">Không thể tải thông tin chuyến đi.</p>';
+        }
+      } catch (e) {
+        console.error(e);
+        scheduleContainer.innerHTML = '<p class="error-text">Lỗi kết nối máy chủ.</p>';
+      }
+    }
+
+    function closeTripDetail() {
+      document.getElementById('trip-detail-section').style.display = 'none';
+      selectedTrip = null;
+      isEditingTrip = false;
+    }
+
+    async function confirmDeleteTrip() {
+      if (!selectedTrip) return;
+      if (!confirm(`Bạn có chắc chắn muốn xóa chuyến đi "${selectedTrip.title}" không?`)) {
+        return;
+      }
+      
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/trips/${selectedTrip._id}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          showToast('Đã xóa chuyến đi thành công!');
+          closeTripDetail();
+          fetchUserTripsList();
+          fetchUserTripsForOptimizer();
+        } else {
+          const data = await res.json();
+          showToast(data.message || 'Xóa chuyến đi thất bại.', 'error');
+        }
+      } catch (e) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    function enableTripEditMode() {
+      if (!selectedTrip) return;
+      
+      isEditingTrip = !isEditingTrip;
+      
+      const btnEdit = document.getElementById('btn-edit-trip');
+      const instructions = document.getElementById('edit-instructions');
+      const btnSave = document.getElementById('btn-save-edited-trip');
+      const viewHeader = document.getElementById('detail-trip-header-view');
+      const editHeader = document.getElementById('detail-trip-header-edit');
+      
+      if (isEditingTrip) {
+        btnEdit.textContent = '🚫 Hủy chỉnh sửa';
+        instructions.style.display = 'block';
+        btnSave.style.display = 'block';
+        
+        // Show inputs & set values
+        viewHeader.style.display = 'none';
+        editHeader.style.display = 'flex';
+        document.getElementById('edit-trip-title-input').value = selectedTrip.title || '';
+        document.getElementById('edit-trip-budget-input').value = selectedTrip.budget || 0;
+        
+        renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+        showToast('Đã bật chế độ chỉnh sửa. Bạn có thể đổi tên, ngân sách, xóa địa điểm hoặc kéo thả sắp xếp lại lộ trình.');
+      } else {
+        btnEdit.textContent = '✏️ Chỉnh sửa chuyến đi';
+        instructions.style.display = 'none';
+        btnSave.style.display = 'none';
+        
+        // Hide inputs
+        viewHeader.style.display = 'flex';
+        editHeader.style.display = 'none';
+        
+        renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+      }
+    }
+
+    async function saveEditedTrip() {
+      const title = document.getElementById('edit-trip-title-input').value.trim();
+      const budget = Number(document.getElementById('edit-trip-budget-input').value) || 0;
+
+      if (!title) {
+        showToast('Tên chuyến đi không được để trống!', 'error');
+        return;
+      }
+
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/trips/${selectedTrip._id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ title, budget })
+        });
+
+        if (res.ok) {
+          showToast('Đã cập nhật thông tin chuyến đi thành công!');
+          selectedTrip = await res.json();
+          
+          document.getElementById('detail-trip-title').textContent = selectedTrip.title;
+          const startD = new Date(selectedTrip.startDate).toLocaleDateString('vi-VN');
+          const endD = new Date(selectedTrip.endDate).toLocaleDateString('vi-VN');
+          document.getElementById('detail-trip-info').innerHTML = `
+            📍 Thành phố: <strong>${selectedTrip.city ? selectedTrip.city.name : 'Chưa rõ'}</strong> | 
+            📅 Thời gian: <strong>${startD} - ${endD}</strong> | 
+            💰 Ngân sách: <strong>${(selectedTrip.budget || 0).toLocaleString('vi-VN')} VNĐ</strong>
+          `;
+          
+          // Switch back header
+          document.getElementById('detail-trip-header-view').style.display = 'flex';
+          document.getElementById('detail-trip-header-edit').style.display = 'none';
+
+          isEditingTrip = false;
+          document.getElementById('btn-edit-trip').textContent = '✏️ Chỉnh sửa chuyến đi';
+          document.getElementById('edit-instructions').style.display = 'none';
+          document.getElementById('btn-save-edited-trip').style.display = 'none';
+          
+          await renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+          fetchUserTripsList();
+        } else {
+          const data = await res.json();
+          showToast(data.message || 'Cập nhật chuyến đi thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    async function handleDeletePlaceClick(event, placeSubId) {
+      if (event) event.stopPropagation();
+      if (!selectedTrip) return;
+      if (!confirm('Bạn có chắc chắn muốn xóa địa điểm này khỏi lịch trình không?')) return;
+
+      const token = getToken();
+      try {
+        const res = await fetch(`/api/trips/${selectedTrip._id}/schedule/places/${placeSubId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (res.ok) {
+          showToast('Đã xóa địa điểm thành công!');
+          // Re-fetch details to update schedule
+          const detailRes = await fetch(`/api/trips/${selectedTrip._id}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (detailRes.ok) {
+            selectedTrip = await detailRes.json();
+            await renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+          }
+        } else {
+          const data = await res.json();
+          showToast(data.message || 'Xóa địa điểm thất bại.', 'error');
+        }
+      } catch (err) {
+        showToast('Lỗi kết nối máy chủ.', 'error');
+      }
+    }
+
+    // --- DRAG & DROP IMPLEMENTATION ---
+    let dragSrcElement = null;
+
+    function handleDragStart(e) {
+      const item = e.target.closest('.place-item');
+      if (!item) return;
+
+      const containerId = item.getAttribute('data-container');
+      if (containerId === 'detail-trip-schedule' && !isEditingTrip) {
+        e.preventDefault();
+        showToast('Vui lòng nhấn "Chỉnh sửa chuyến đi" để thay đổi lộ trình!', 'warning');
+        return;
+      }
+
+      dragSrcElement = item;
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+
+      e.dataTransfer.setData('text/plain', JSON.stringify({
+        containerId: containerId,
+        day: parseInt(item.getAttribute('data-day')),
+        idx: parseInt(item.getAttribute('data-idx')),
+        id: item.getAttribute('data-id')
+      }));
+    }
+
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      return false;
+    }
+
+    function handleDragEnter(e) {
+      const list = e.target.closest('.places-list');
+      if (list) {
+        list.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      const list = e.target.closest('.places-list');
+      if (list) {
+        list.classList.remove('drag-over');
+      }
+    }
+
+    async function handleDrop(e) {
+      e.stopPropagation();
+      e.preventDefault();
+
+      const targetList = e.target.closest('.places-list');
+      if (!targetList || !dragSrcElement) return;
+
+      targetList.classList.remove('drag-over');
+
+      try {
+        const dragData = JSON.parse(e.dataTransfer.getData('text/plain') || '{}');
+        const sourceContainer = dragData.containerId;
+        const sourceDay = dragData.day;
+        const sourceIdx = dragData.idx;
+
+        const targetContainer = targetList.getAttribute('data-container');
+        const targetDay = parseInt(targetList.getAttribute('data-day'));
+
+        if (sourceContainer !== targetContainer) {
+          showToast('Không thể kéo thả giữa các bảng lịch trình khác nhau!', 'error');
+          return;
+        }
+
+        if (sourceDay !== targetDay) {
+          showToast('Chỉ có thể thay đổi thứ tự các địa điểm trong cùng một ngày!', 'error');
+          return;
+        }
+
+        // Determine drop position relative to items inside the targetList
+        const targetItem = e.target.closest('.place-item');
+        let targetIdx = 0;
+
+        if (targetItem) {
+          targetIdx = parseInt(targetItem.getAttribute('data-idx'));
+        } else {
+          // If dropped on the list element container but not directly on an item, append to the end
+          targetIdx = targetList.querySelectorAll('.place-item').length - 1;
+        }
+
+        if (sourceIdx === targetIdx) return;
+
+        if (targetContainer === 'ai-schedule-list') {
+          if (!currentAISuggestion) return;
+          const dayData = currentAISuggestion.schedule.find(d => d.day === targetDay);
+          if (dayData) {
+            const [movedPlace] = dayData.places.splice(sourceIdx, 1);
+            dayData.places.splice(targetIdx, 0, movedPlace);
+            dayData.places.forEach((p, index) => {
+              p.order = index;
+            });
+
+            if (savedTripId) {
+              const placeElements = Array.from(targetList.querySelectorAll('.place-item'));
+              const [movedElement] = placeElements.splice(sourceIdx, 1);
+              placeElements.splice(targetIdx, 0, movedElement);
+
+              const placesOrder = placeElements.map(el => el.getAttribute('data-id'));
+
+              const token = getToken();
+              const res = await fetch(`/api/trips/${savedTripId}/schedule/reorder`, {
+                method: 'PUT',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                  day: targetDay,
+                  placesOrder: placesOrder
+                })
+              });
+
+              if (res.ok) {
+                const updatedTrip = await res.json();
+                currentAISuggestion = updatedTrip;
+                showToast('Đã tự động lưu thứ tự di chuyển mới vào cơ sở dữ liệu!');
+                await renderAISchedule(currentAISuggestion.schedule, 'ai-schedule-list');
+              } else {
+                const data = await res.json();
+                showToast(data.message || 'Không thể đồng bộ thứ tự vào database.', 'error');
+              }
+            } else {
+              await renderAISchedule(currentAISuggestion.schedule, 'ai-schedule-list');
+              showToast('Đã cập nhật thứ tự địa điểm đề xuất!');
+            }
+          }
+        } else if (targetContainer === 'optimize-schedule-list') {
+          const select = document.getElementById('optimize-trip-select');
+          const tripId = select.value;
+          if (!tripId) return;
+
+          const placeElements = Array.from(targetList.querySelectorAll('.place-item'));
+          const [movedElement] = placeElements.splice(sourceIdx, 1);
+          placeElements.splice(targetIdx, 0, movedElement);
+
+          const placesOrder = placeElements.map(el => el.getAttribute('data-id'));
+
+          const token = getToken();
+          const res = await fetch(`/api/trips/${tripId}/schedule/reorder`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              day: targetDay,
+              placesOrder: placesOrder
+            })
+          });
+
+          if (res.ok) {
+            const updatedTrip = await res.json();
+            showToast('Đã lưu thứ tự di chuyển mới vào cơ sở dữ liệu!');
+            await renderAISchedule(updatedTrip.schedule, 'optimize-schedule-list');
+          } else {
+            const data = await res.json();
+            showToast(data.message || 'Không thể sắp xếp lại thứ tự.', 'error');
+          }
+        } else if (targetContainer === 'detail-trip-schedule') {
+          if (!isEditingTrip) return;
+          if (!selectedTrip) return;
+
+          const placeElements = Array.from(targetList.querySelectorAll('.place-item'));
+          const [movedElement] = placeElements.splice(sourceIdx, 1);
+          placeElements.splice(targetIdx, 0, movedElement);
+
+          const placesOrder = placeElements.map(el => el.getAttribute('data-id'));
+
+          const token = getToken();
+          const res = await fetch(`/api/trips/${selectedTrip._id}/schedule/reorder`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              day: targetDay,
+              placesOrder: placesOrder
+            })
+          });
+
+          if (res.ok) {
+            const updatedTrip = await res.json();
+            selectedTrip = updatedTrip;
+            showToast('Đã tự động cập nhật lộ trình mới!');
+            await renderAISchedule(selectedTrip.schedule, 'detail-trip-schedule');
+          } else {
+            const data = await res.json();
+            showToast(data.message || 'Không thể cập nhật thứ tự.', 'error');
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        showToast('Lỗi khi kéo thả địa điểm.', 'error');
+      }
+    }
+
+    function handleDragEnd(e) {
+      if (dragSrcElement) {
+        dragSrcElement.classList.remove('dragging');
+      }
+      document.querySelectorAll('.places-list').forEach(l => l.classList.remove('drag-over'));
+      dragSrcElement = null;
+    }
+
+    // Register drag & drop event listeners globally
+    document.addEventListener('dragstart', handleDragStart);
+    document.addEventListener('dragover', handleDragOver);
+    document.addEventListener('dragenter', handleDragEnter);
+    document.addEventListener('dragleave', handleDragLeave);
+    document.addEventListener('drop', handleDrop);
+    document.addEventListener('dragend', handleDragEnd);
 
     // Page Load check: If already logged in, show profile tab button & load profile
     window.onload = () => {
