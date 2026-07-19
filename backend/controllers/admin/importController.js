@@ -14,7 +14,15 @@ const SAMPLE_IMAGES = {
     'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa',
     'https://images.unsplash.com/photo-1582719508461-905c673771fd',
     'https://images.unsplash.com/photo-1540548948273-b45a2a7b2c29',
-    'https://images.unsplash.com/photo-1556740749-887f6717d7e4'
+    'https://images.unsplash.com/photo-1556740749-887f6717d7e4',
+    'https://images.unsplash.com/photo-1571896349842-33c89424de2d',
+    'https://images.unsplash.com/photo-1590490360182-c33d57733427',
+    'https://images.unsplash.com/photo-1611892440504-42a792e24d32',
+    'https://images.unsplash.com/photo-1596394516093-501ba68a0ba6',
+    'https://images.unsplash.com/photo-1529290130-4ca3753253ae',
+    'https://images.unsplash.com/photo-1578683010236-d716f9a3f461',
+    'https://images.unsplash.com/photo-1568495248636-6432b97bd949',
+    'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4'
   ],
   Attraction: [
     'https://images.unsplash.com/photo-1509062522246-3755977927d7',
@@ -23,7 +31,15 @@ const SAMPLE_IMAGES = {
     'https://images.unsplash.com/photo-1528127269322-539801943592',
     'https://images.unsplash.com/photo-1508672019048-805c876b67e2',
     'https://images.unsplash.com/photo-1555939594-58d7cb561ad1',
-    'https://images.unsplash.com/photo-1599707367072-cd6ada2bc375'
+    'https://images.unsplash.com/photo-1599707367072-cd6ada2bc375',
+    'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1',
+    'https://images.unsplash.com/photo-1507525428034-b723cf961d3e',
+    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800',
+    'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05',
+    'https://images.unsplash.com/photo-1441974231531-c6227db76b6e',
+    'https://images.unsplash.com/photo-1472214222541-d510753a4707',
+    'https://images.unsplash.com/photo-1518391846015-55a9cc003b25'
   ],
   Restaurant: [
     'https://images.unsplash.com/photo-1555396273-367ea4eb4db5',
@@ -32,7 +48,15 @@ const SAMPLE_IMAGES = {
     'https://images.unsplash.com/photo-1504674900247-0877df9cc836',
     'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38',
     'https://images.unsplash.com/photo-1498654896293-37aacf113fd9',
-    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4'
+    'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4',
+    'https://images.unsplash.com/photo-1414235077428-338989a2e8c0',
+    'https://images.unsplash.com/photo-1550966871-3ed3cdb5ed0c',
+    'https://images.unsplash.com/photo-1514933651103-005eec06c04b',
+    'https://images.unsplash.com/photo-1482049016688-2d3e1b311543',
+    'https://images.unsplash.com/photo-1467003909585-2f8a72700288',
+    'https://images.unsplash.com/photo-1502301197179-6522b4b12d68',
+    'https://images.unsplash.com/photo-1484723091739-30a097e8f929',
+    'https://images.unsplash.com/photo-1543353071-10c8ba85a904'
   ],
   Cafe: [
     'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb',
@@ -41,12 +65,20 @@ const SAMPLE_IMAGES = {
     'https://images.unsplash.com/photo-1554118811-1e0d58224f24',
     'https://images.unsplash.com/photo-1511920170033-f8396924c348',
     'https://images.unsplash.com/photo-1498804103079-a6351b050096',
-    'https://images.unsplash.com/photo-1541167760496-1628856ab772'
+    'https://images.unsplash.com/photo-1541167760496-1628856ab772',
+    'https://images.unsplash.com/photo-1497935586351-b67a49e012bf',
+    'https://images.unsplash.com/photo-1507133750040-4a8f57021571',
+    'https://images.unsplash.com/photo-1459756269037-a7dc693965a6',
+    'https://images.unsplash.com/photo-1509042239860-f550ce710b93',
+    'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd',
+    'https://images.unsplash.com/photo-1517256064527-09c53b2d0bc6',
+    'https://images.unsplash.com/photo-1497515114629-f71d768fd07c',
+    'https://images.unsplash.com/photo-1504753793650-d4a2b783c15e'
   ]
 };
 
 // Helper gán ảnh ngẫu nhiên từ danh mục
-const getRandomImages = (type, count = 2) => {
+const getRandomImages = (type, count = 5) => {
   const list = SAMPLE_IMAGES[type] || [];
   const shuffled = [...list].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
@@ -270,7 +302,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
       await Hotel.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Hotel'),
-        images: getRandomImages('Hotel', 2),
+        images: getRandomImages('Hotel', 5),
         stars: Math.floor(Math.random() * 3) + 3, // 3 - 5 sao
         pricePerNight: (Math.floor(Math.random() * 6) + 2) * 400000, // 800k - 3.2tr
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)), // 4.0 - 4.8
@@ -288,7 +320,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
       await Attraction.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Attraction'),
-        images: getRandomImages('Attraction', 2),
+        images: getRandomImages('Attraction', 5),
         admissionFee: fees[Math.floor(Math.random() * fees.length)],
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
         numReviews: Math.floor(Math.random() * 25) + 5
@@ -306,7 +338,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
       await Restaurant.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Restaurant'),
-        images: getRandomImages('Restaurant', 2),
+        images: getRandomImages('Restaurant', 5),
         cuisineType: cuisines[Math.floor(Math.random() * cuisines.length)],
         price: prices[Math.floor(Math.random() * prices.length)],
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
@@ -324,7 +356,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
       await Cafe.create({
         ...item,
         description: generateDescription(item.name, city.name, 'Cafe'),
-        images: getRandomImages('Cafe', 2),
+        images: getRandomImages('Cafe', 5),
         price: prices[Math.floor(Math.random() * prices.length)],
         rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
         numReviews: Math.floor(Math.random() * 25) + 5
