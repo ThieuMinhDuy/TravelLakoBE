@@ -2866,13 +2866,13 @@
             💰 Ngân sách: <strong>${(selectedTrip.budget || 0).toLocaleString('vi-VN')} VNĐ</strong>
           `;
 
-          // Check if edit is allowed (only upcoming or ongoing)
+          // Check if edit is allowed (only upcoming trips - haven't started yet)
           const now = new Date();
           const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-          const tripEnd = new Date(selectedTrip.endDate);
-          const tripEndUTC = new Date(Date.UTC(tripEnd.getUTCFullYear(), tripEnd.getUTCMonth(), tripEnd.getUTCDate()));
+          const tripStart = new Date(selectedTrip.startDate);
+          const tripStartUTC = new Date(Date.UTC(tripStart.getUTCFullYear(), tripStart.getUTCMonth(), tripStart.getUTCDate()));
           
-          if (today > tripEndUTC) {
+          if (today >= tripStartUTC) {
             document.getElementById('btn-edit-trip').style.display = 'none';
           }
 
