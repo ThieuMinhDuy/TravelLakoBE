@@ -7,6 +7,31 @@ const router = express.Router();
 // Tất cả các route này yêu cầu quyền đăng nhập & là Admin
 router.use(protect, admin);
 
+/**
+ * @swagger
+ * /admin/import/vietnam-cities:
+ *   get:
+ *     summary: Lấy danh sách các thành phố Việt Nam để lựa chọn
+ *     tags: [Admin - Import]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Danh sách thành phố thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                   name:
+ *                     type: string
+ *                   state:
+ *                     type: string
+ */
 router.get('/vietnam-cities', getVietnamCities);
 
 /**
