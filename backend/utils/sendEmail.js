@@ -1,29 +1,13 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
 const sendEmail = async ({ to, subject, html }) => {
-  const port = parseInt(process.env.SMTP_PORT || '587');
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: port,
-    secure: port === 465,
-    family:4,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-    tls: {
-      rejectUnauthorized: false,
-    },
-  });
-
-  const mailOptions = {
-    from: `"TravelLako" <${process.env.SMTP_USER}>`,
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  await resend.emails.send({
+    from: 'TravelLako <onboarding@resend.dev>', // Email thử nghiệm mặc định của Resend
     to,
     subject,
     html,
-  };
-
-  await transporter.sendMail(mailOptions);
+  });
 };
 
 export default sendEmail;
