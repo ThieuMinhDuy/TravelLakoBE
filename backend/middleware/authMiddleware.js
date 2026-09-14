@@ -26,7 +26,12 @@ const protect = asyncHandler(async (req, res, next) => {
 
     req.user = await User.findById(decoded.userId).select('-password');
 
-    if (req.user && req.user.isBlocked) {
+    if (!req.user) {
+      res.status(401);
+      throw new Error('Người dùng không tồn tại hoặc đã bị xóa!');
+    }
+
+    if (req.user.isBlocked) {
       res.status(403);
       throw new Error('Tài khoản của bạn đã bị khóa!');
     }

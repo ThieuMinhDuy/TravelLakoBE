@@ -22,12 +22,19 @@ import adminDashboardRoutes from './routes/admin/dashboardRoutes.js';
 import adminImportRoutes from './routes/admin/importRoutes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerSpec from './docs/swagger.js';
+import cors from "cors"
 
 const port = process.env.PORT || 5000;
 
 connectDB();
 
 const app = express();
+
+app.use(cors({
+  origin: ['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean),
+  credentials: true,
+}));
+
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (req, res) => {
