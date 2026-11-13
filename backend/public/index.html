@@ -8,7 +8,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
   <style>
     :root {
       --bg-gradient: radial-gradient(circle at 50% 50%, #111827 0%, #030712 100%);
@@ -401,6 +403,60 @@
       background: rgba(255, 255, 255, 0.08);
       margin: 2rem 0;
     }
+
+    /* ===== Google Auth Section ===== */
+    .or-divider {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin: 1.25rem 0;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+    }
+    .or-divider::before,
+    .or-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+    }
+    #google-signin-btn {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+    .manual-token-box {
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      margin-top: 0.5rem;
+    }
+    .manual-token-box label {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 0.4rem;
+    }
+    .manual-token-box textarea {
+      font-size: 0.75rem;
+      font-family: monospace;
+      resize: vertical;
+    }
+    .manual-token-box .btn {
+      margin-top: 0.5rem;
+      font-size: 0.82rem;
+    }
+    summary {
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      user-select: none;
+      margin-bottom: 0.5rem;
+    }
+    summary:hover { color: var(--text-main); }
 
     .unverified-badge {
       background: rgba(239, 68, 68, 0.15);
@@ -833,6 +889,22 @@
         <button type="button" class="forgot-link-btn" onclick="switchTab('forgot')">Quên mật khẩu?</button>
         <button type="submit" class="btn">Đăng nhập</button>
       </form>
+
+      <!-- Google Sign-In -->
+      <div class="or-divider">HOẶC</div>
+
+      <!-- Nút Google chính thức (render bởi GIS SDK) -->
+      <div id="google-signin-btn"></div>
+
+      <!-- Box dán token thủ công để test API -->
+      <details>
+        <summary>🧪 Dán Google ID Token thủ công để test</summary>
+        <div class="manual-token-box">
+          <label for="manual-id-token">Dán credential / idToken từ Google vào đây:</label>
+          <textarea id="manual-id-token" class="form-control" rows="3" placeholder="eyJhbGciOiJSUzI1NiIsImtpZCI6..."></textarea>
+          <button class="btn" onclick="handleManualGoogleLogin()">Gửi lên POST /api/auth/google</button>
+        </div>
+      </details>
     </div>
 
     <!-- 2. Pane Đăng ký -->
@@ -3258,6 +3330,79 @@
     document.addEventListener('dragleave', handleDragLeave);
     document.addEventListener('drop', handleDrop);
     document.addEventListener('dragend', handleDragEnd);
+
+    // ===== GOOGLE AUTHENTICATION =====
+    const GOOGLE_CLIENT_ID = '967115339037-bniuoocvo75vm9stvg1on9882v19np9f.apps.googleusercontent.com';
+
+    // Khởi tạo nút Google Sign-In sau khi GIS SDK load xong
+    function initGoogleSignIn() {
+      if (!window.google || !google.accounts) return;
+      google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: onGoogleSignInCallback,
+        auto_prompt: false,
+      });
+      google.accounts.id.renderButton(
+        document.getElementById('google-signin-btn'),
+        { theme: 'outline', size: 'large', text: 'continue_with', width: 320 }
+      );
+    }
+
+    // Callback khi người dùng chọn tài khoản Google thành công
+    function onGoogleSignInCallback(response) {
+      if (!response || !response.credential) {
+        showToast('Không nhận được xác thực từ Google!', 'error');
+        return;
+      }
+      callGoogleAuthAPI(response.credential);
+    }
+
+    // Hàm test thủ công: dán token vào textarea rồi bấm nút
+    function handleManualGoogleLogin() {
+      const token = document.getElementById('manual-id-token').value.trim();
+      if (!token) {
+        showToast('Vui lòng dán ID Token vào ô trước!', 'error');
+        return;
+      }
+      callGoogleAuthAPI(token);
+    }
+
+    // Gọi POST /api/auth/google và xử lý kết quả
+    async function callGoogleAuthAPI(idToken) {
+      showToast('Đang xác thực với máy chủ...');
+      try {
+        const res = await fetch('/api/auth/google', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+          credentials: 'include',
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          showToast(`🎉 Đăng nhập Google thành công! Xin chào ${data.name}`);
+          localStorage.setItem('token', data.token);
+          document.getElementById('profile-tab-btn').style.display = 'block';
+          switchTab('profile');
+          await fetchUserProfile();
+          loadChatHistoryFromServer();
+        } else {
+          showToast(data.message || 'Đăng nhập Google thất bại.', 'error');
+        }
+      } catch (err) {
+        console.error('Google Auth error:', err);
+        showToast('Lỗi kết nối máy chủ khi xác thực Google.', 'error');
+      }
+    }
+
+    // Gọi init khi GIS SDK sẵn sàng (SDK có thể load sau script)
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(initGoogleSignIn, 500);
+      });
+    } else {
+      setTimeout(initGoogleSignIn, 500);
+    }
 
     // Page Load check: If already logged in, show profile tab button & load profile
     window.onload = () => {
