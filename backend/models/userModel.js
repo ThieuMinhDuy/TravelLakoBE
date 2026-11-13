@@ -14,7 +14,16 @@ const userSchema = mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: false,
+    },
+    authType: {
+      type: String,
+      enum: ['local', 'google'],
+      default: 'local',
+    },
+    googleId: {
+      type: String,
+      default: null,
     },
     avatar: {
       type: String,
@@ -75,13 +84,14 @@ const userSchema = mongoose.Schema(
 
 // Match user entered password to hashed password in database
 userSchema.methods.matchPassword = async function (enteredPassword) {
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Encrypt password using bcrypt
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
-    next();
+  if (!this.password || !this.isModified('password')) {
+    return next();
   }
 
   const salt = await bcrypt.genSalt(10);

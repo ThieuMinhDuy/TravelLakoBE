@@ -9,6 +9,7 @@ import {
   resendOTP,
   forgotPassword,
   resetPassword,
+  googleLogin,
 } from '../../controllers/customer/authController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 /**
@@ -306,10 +307,44 @@ import { protect } from '../../middleware/authMiddleware.js';
  *         description: Đặt lại mật khẩu thành công
  */
 
+/**
+ * @swagger
+ * /auth/google:
+ *   post:
+ *     summary: Đăng nhập hoặc đăng ký bằng Google ID Token
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - idToken
+ *             properties:
+ *               idToken:
+ *                 type: string
+ *                 description: Chuỗi Google ID Token (credential) nhận từ Google SDK phía Frontend
+ *     responses:
+ *       200:
+ *         description: Đăng nhập thành công, trả về thông tin user và cấp JWT token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Thiếu token hoặc token không lấy được email
+ *       401:
+ *         description: Google ID Token không hợp lệ hoặc đã hết hạn
+ *       403:
+ *         description: Tài khoản đã bị khóa
+ */
+
 const router = express.Router();
 
 router.post('/register', registerUser);
 router.post('/login', authUser);
+router.post('/google', googleLogin);
 router.post('/logout', logoutUser);
 router.post('/verify-otp', verifyOTP);
 router.post('/resend-otp', resendOTP);

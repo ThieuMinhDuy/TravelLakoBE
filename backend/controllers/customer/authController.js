@@ -1,11 +1,14 @@
 import asyncHandler from 'express-async-handler';
 import validator from 'validator';
+import { OAuth2Client } from 'google-auth-library';
 import User from '../../models/userModel.js';
 import Trip from '../../models/tripModel.js';
 import Favorite from '../../models/favoriteModel.js';
 import Review from '../../models/reviewModel.js';
 import generateToken from '../../utils/generateToken.js';
 import sendEmail from '../../utils/sendEmail.js';
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 // @desc    Auth user & get token
 const authUser = asyncHandler(async (req, res) => {
@@ -429,6 +432,88 @@ const resetPassword = asyncHandler(async (req, res) => {
   res.status(200).json({ message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.' });
 });
 
+// @desc    Auth user with Google ID token
+// @route   POST /api/auth/google
+// @access  Public
+const googleLogin = asyncHandler(async (req, res) => {
+  const idToken = req.body.idToken || req.body.credential || req.body.token;
+
+  if (!idToken) {
+    res.status(400);
+    throw new Error('Vui lòng cung cấp Google ID Token (idToken hoặc credential)!');
+  }
+
+  let ticket;
+  try {
+    ticket = await client.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+  } catch (error) {
+    console.error('Lỗi xác thực Google Token:', error.message);
+    res.status(401);
+    throw new Error('Google ID Token không hợp lệ hoặc đã hết hạn!');
+  }
+
+  const payload = ticket.getPayload();
+  if (!payload || !payload.email) {
+    res.status(400);
+    throw new Error('Không thể lấy thông tin email từ Google Token!');
+  }
+
+  const { sub: googleId, email, name, picture } = payload;
+
+  // Tìm user theo email hoặc googleId
+  let user = await User.findOne({
+    $or: [{ email }, { googleId }],
+  });
+
+  if (user) {
+    if (user.isBlocked) {
+      res.status(403);
+      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!');
+    }
+
+    let isUpdated = false;
+    if (!user.googleId) {
+      user.googleId = googleId;
+      isUpdated = true;
+    }
+    if (!user.avatar && picture) {
+      user.avatar = picture;
+      isUpdated = true;
+    }
+    if (!user.isVerified) {
+      user.isVerified = true;
+      isUpdated = true;
+    }
+
+    if (isUpdated) {
+      await user.save();
+    }
+  } else {
+    user = await User.create({
+      name: name || 'Người dùng Google',
+      email,
+      avatar: picture || '',
+      googleId,
+      authType: 'google',
+      isVerified: true,
+    });
+  }
+
+  const token = generateToken(res, user._id);
+
+  res.status(200).json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    avatar: user.avatar,
+    isAdmin: user.isAdmin,
+    token,
+  });
+});
+
 export {
   authUser,
   registerUser,
@@ -439,4 +524,5 @@ export {
   resendOTP,
   forgotPassword,
   resetPassword,
+  googleLogin,
 };
