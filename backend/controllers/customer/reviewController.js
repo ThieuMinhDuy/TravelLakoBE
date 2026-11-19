@@ -50,6 +50,28 @@ const getPlaceReviews = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc    Get reviews written by the current user
+// @route   GET /api/reviews/me
+// @access  Private
+const getMyReviews = asyncHandler(async (req, res) => {
+  const reviews = await Review.find({ user: req.user._id })
+    .select('_id rating comment itemType itemId createdAt')
+    .populate({
+      path: 'itemId',
+      select: '_id name images address rating city',
+      populate: { path: 'city', select: 'name' },
+    })
+    .sort({ createdAt: -1 });
+
+  // Bỏ các review mà địa điểm đã bị xóa (itemId null sau populate)
+  const activeReviews = reviews.filter((review) => review.itemId !== null);
+
+  res.json({
+    total: activeReviews.length,
+    reviews: activeReviews,
+  });
+});
+
 // @desc    Create a review for a place
 // @route   POST /api/reviews
 // @access  Private
@@ -127,7 +149,7 @@ const deleteMyReview = asyncHandler(async (req, res) => {
   // Check review ownership
   if (review.user.toString() !== req.user._id.toString()) {
     res.status(403);
-    throw new Error('Not authorized to delete this review');
+    throw new Error('Bạn không có quyền xóa đánh giá này!');
   }
 
   const { itemId, itemType } = review;
@@ -140,4 +162,4 @@ const deleteMyReview = asyncHandler(async (req, res) => {
   res.json({ message: 'Review removed successfully' });
 });
 
-export { getPlaceReviews, createReview, deleteMyReview };
+export { getPlaceReviews, getMyReviews, createReview, deleteMyReview };

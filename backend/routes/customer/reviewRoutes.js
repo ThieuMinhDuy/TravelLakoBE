@@ -1,5 +1,5 @@
 import express from 'express';
-import { getPlaceReviews, createReview, deleteMyReview } from '../../controllers/customer/reviewController.js';
+import { getPlaceReviews, getMyReviews, createReview, deleteMyReview } from '../../controllers/customer/reviewController.js';
 import { protect } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -35,7 +35,76 @@ const router = express.Router();
  *         itemId: "60d0fe4f5311236168a109c9"
  *         rating: 5
  *         comment: "Khách sạn rất đẹp, phục vụ chu đáo!"
+ *
+ *     MyReview:
+ *       type: object
+ *       properties:
+ *         _id:
+ *           type: string
+ *         rating:
+ *           type: number
+ *         comment:
+ *           type: string
+ *         itemType:
+ *           type: string
+ *           enum: [Attraction, Hotel, Restaurant, Cafe]
+ *         createdAt:
+ *           type: string
+ *           format: date-time
+ *         itemId:
+ *           type: object
+ *           description: Địa điểm được đánh giá (đã populate)
+ *           properties:
+ *             _id:
+ *               type: string
+ *             name:
+ *               type: string
+ *             images:
+ *               type: array
+ *               items:
+ *                 type: string
+ *             address:
+ *               type: string
+ *             rating:
+ *               type: number
+ *             city:
+ *               type: object
+ *               properties:
+ *                 _id:
+ *                   type: string
+ *                 name:
+ *                   type: string
  */
+
+/**
+ * @swagger
+ * /reviews/me:
+ *   get:
+ *     summary: Lấy danh sách đánh giá của người dùng hiện tại (mới nhất trước)
+ *     description: Bỏ qua các đánh giá mà địa điểm đã bị xóa; `total` bằng số phần tử trong `reviews`.
+ *     tags: [Reviews]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 total:
+ *                   type: integer
+ *                 reviews:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/MyReview'
+ *       401:
+ *         description: Chưa đăng nhập
+ */
+// Khai báo trước '/:itemType/:itemId'
+router.get('/me', protect, getMyReviews);
 
 /**
  * @swagger
