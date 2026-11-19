@@ -29,6 +29,11 @@ const userSchema = mongoose.Schema(
       type: String,
       default: '',
     },
+    // Ảnh bìa trang cá nhân (URL ảnh đã upload qua POST /api/upload)
+    coverImage: {
+      type: String,
+      default: '',
+    },
     phone: {
       type: String,
       default: '',
@@ -62,6 +67,16 @@ const userSchema = mongoose.Schema(
         default: null,
       },
       expiresAt: {
+        type: Date,
+        default: null,
+      },
+      // Số lần nhập sai mã hiện tại (quá giới hạn thì mã bị hủy)
+      attempts: {
+        type: Number,
+        default: 0,
+      },
+      // Thời điểm gửi mã gần nhất (dùng cho cooldown gửi lại)
+      lastSentAt: {
         type: Date,
         default: null,
       },

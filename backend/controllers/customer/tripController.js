@@ -147,8 +147,8 @@ const getTripById = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to view this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   res.json(trip);
@@ -167,8 +167,8 @@ const deleteTrip = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to delete this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   await Trip.deleteOne({ _id: req.params.id });
@@ -201,8 +201,8 @@ const addPlaceToSchedule = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   // Check if place exists
@@ -251,8 +251,8 @@ const removePlaceFromSchedule = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   const { subId } = req.params;
@@ -303,8 +303,8 @@ const reorderSchedulePlaces = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   const daySchedule = trip.schedule.find(s => s.day === Number(day));
@@ -363,8 +363,8 @@ const checkInPlace = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   const { subId } = req.params;
@@ -408,8 +408,8 @@ const updateTripDiary = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   if (notes !== undefined) {
@@ -442,8 +442,8 @@ const updateTripMetadata = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
-    throw new Error('Not authorized to modify this trip');
+    res.status(403);
+    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
   }
 
   if (title !== undefined) {

@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import validator from 'validator';
 import User from '../../models/userModel.js';
 import Trip from '../../models/tripModel.js';
 import Review from '../../models/reviewModel.js';
@@ -40,10 +41,58 @@ const updateUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
 
   if (user) {
-    user.name = req.body.name || user.name;
-    user.email = req.body.email || user.email;
-    user.isAdmin = req.body.isAdmin !== undefined ? req.body.isAdmin : user.isAdmin;
-    user.isBlocked = req.body.isBlocked !== undefined ? req.body.isBlocked : user.isBlocked;
+    const { name, email, isAdmin, isBlocked } = req.body;
+
+    if (name !== undefined && (typeof name !== 'string' || name.trim() === '')) {
+      res.status(400);
+      throw new Error('Tên người dùng không hợp lệ!');
+    }
+
+    if (isAdmin !== undefined && typeof isAdmin !== 'boolean') {
+      res.status(400);
+      throw new Error('isAdmin phải là true hoặc false');
+    }
+
+    if (isBlocked !== undefined && typeof isBlocked !== 'boolean') {
+      res.status(400);
+      throw new Error('isBlocked phải là true hoặc false');
+    }
+
+    // Đổi email: phải đúng định dạng và chưa được tài khoản khác sử dụng
+    if (email !== undefined && email !== user.email) {
+      if (typeof email !== 'string' || !validator.isEmail(email)) {
+        res.status(400);
+        throw new Error('Email không hợp lệ!');
+      }
+      const emailTaken = await User.exists({ email, _id: { $ne: user._id } });
+      if (emailTaken) {
+        res.status(400);
+        throw new Error('Email này đã được tài khoản khác sử dụng!');
+      }
+    }
+
+    const isSelf = user._id.toString() === req.user._id.toString();
+    const willLoseAdmin = isAdmin === false || isBlocked === true;
+
+    // Admin không được tự gỡ quyền hoặc tự khóa chính mình
+    if (isSelf && user.isAdmin && willLoseAdmin) {
+      res.status(400);
+      throw new Error('Bạn không thể tự gỡ quyền Admin hoặc tự khóa tài khoản của chính mình!');
+    }
+
+    // Không được gỡ quyền / khóa admin cuối cùng còn hoạt động
+    if (user.isAdmin && !user.isBlocked && willLoseAdmin) {
+      const activeAdmins = await User.countDocuments({ isAdmin: true, isBlocked: false });
+      if (activeAdmins <= 1) {
+        res.status(400);
+        throw new Error('Không thể gỡ quyền hoặc khóa quản trị viên cuối cùng!');
+      }
+    }
+
+    if (name !== undefined) user.name = name.trim();
+    if (email !== undefined) user.email = email;
+    if (isAdmin !== undefined) user.isAdmin = isAdmin;
+    if (isBlocked !== undefined) user.isBlocked = isBlocked;
 
     const updatedUser = await user.save();
 
@@ -68,6 +117,11 @@ const deleteUser = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
 
   if (user) {
+    if (user._id.toString() === req.user._id.toString()) {
+      res.status(400);
+      throw new Error('Bạn không thể tự xóa tài khoản của chính mình!');
+    }
+
     if (user.isAdmin && (await User.countDocuments({ isAdmin: true })) <= 1) {
       res.status(400);
       throw new Error('Cannot delete the last administrator');

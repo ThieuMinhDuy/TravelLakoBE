@@ -30,6 +30,12 @@ connectDB();
 
 const app = express();
 
+// Khi deploy (Render...) request đi qua 1 reverse proxy: tin header X-Forwarded-For
+// để rate limit tính theo IP thật của người dùng thay vì IP của proxy.
+// Có thể ghi đè bằng biến môi trường TRUST_PROXY (số hop proxy, 0 = tắt).
+const trustProxy = process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'development' ? '0' : '1');
+app.set('trust proxy', Number(trustProxy));
+
 app.use(cors({
   origin: ['http://localhost:5173', process.env.FRONTEND_URL].filter(Boolean),
   credentials: true,

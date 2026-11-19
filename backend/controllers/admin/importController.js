@@ -4,6 +4,7 @@ import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
+import escapeRegex from '../../utils/escapeRegex.js';
 
 // Kho ảnh Unsplash mẫu chất lượng cao cho từng danh mục
 const SAMPLE_IMAGES = {
@@ -135,7 +136,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   } else {
     // 2. Tìm theo tên thành phố (không phân biệt hoa thường)
     const normalizedName = cityName.trim();
-    city = await City.findOne({ name: { $regex: new RegExp(`^${normalizedName}$`, 'i') } });
+    city = await City.findOne({ name: { $regex: new RegExp(`^${escapeRegex(normalizedName)}$`, 'i') } });
 
     if (!city) {
       // Gọi API địa lý Nominatim miễn phí của OpenStreetMap để định vị tọa độ

@@ -22,6 +22,25 @@ const getModelByType = (type) => {
   }
 };
 
+// Các field admin được phép ghi theo từng loại địa điểm.
+// Không cho ghi _id, rating, numReviews, createdAt... (rating/numReviews do hệ thống review tính).
+const COMMON_FIELDS = ['name', 'city', 'description', 'images', 'address', 'coordinates'];
+const EDITABLE_FIELDS = {
+  attraction: [...COMMON_FIELDS, 'admissionFee'],
+  hotel: [...COMMON_FIELDS, 'stars', 'pricePerNight'],
+  restaurant: [...COMMON_FIELDS, 'cuisineType', 'price'],
+  cafe: [...COMMON_FIELDS, 'price'],
+};
+
+/** Lấy ra các field hợp lệ từ body theo loại địa điểm */
+const pickEditableFields = (type, body = {}) => {
+  const allowed = EDITABLE_FIELDS[type.toLowerCase()] || [];
+  return allowed.reduce((acc, key) => {
+    if (body[key] !== undefined) acc[key] = body[key];
+    return acc;
+  }, {});
+};
+
 // @desc    Get all places of a specific type
 // @route   GET /api/admin/places/:type
 // @access  Private/Admin
@@ -86,8 +105,8 @@ const createPlace = asyncHandler(async (req, res) => {
     throw new Error('City not found');
   }
 
-  // Create place with req.body (Mongoose will filter out extra fields based on Schema definitions)
-  const place = new Model(req.body);
+  // Chỉ nhận các field được phép (không cho tự đặt rating, numReviews, _id...)
+  const place = new Model(pickEditableFields(req.params.type, req.body));
   const createdPlace = await place.save();
   res.status(201).json(createdPlace);
 });
@@ -114,16 +133,18 @@ const updatePlace = asyncHandler(async (req, res) => {
   const place = await Model.findById(req.params.id);
 
   if (place) {
-    // Update fields dynamically from request body
-    Object.keys(req.body).forEach((key) => {
+    // Chỉ cập nhật các field được phép theo loại địa điểm
+    const updates = pickEditableFields(req.params.type, req.body);
+    Object.keys(updates).forEach((key) => {
       // Avoid overwriting nested structures like coordinates partially unless handled
-      if (key === 'coordinates' && req.body.coordinates) {
+      if (key === 'coordinates') {
+        if (!updates.coordinates || typeof updates.coordinates !== 'object') return;
         place.coordinates = {
-          lat: req.body.coordinates.lat !== undefined ? req.body.coordinates.lat : place.coordinates.lat,
-          lng: req.body.coordinates.lng !== undefined ? req.body.coordinates.lng : place.coordinates.lng,
+          lat: updates.coordinates.lat !== undefined ? updates.coordinates.lat : place.coordinates.lat,
+          lng: updates.coordinates.lng !== undefined ? updates.coordinates.lng : place.coordinates.lng,
         };
       } else {
-        place[key] = req.body[key];
+        place[key] = updates[key];
       }
     });
 
