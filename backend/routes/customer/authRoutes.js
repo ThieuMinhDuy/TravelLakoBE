@@ -5,6 +5,7 @@ import {
   logoutUser,
   getUserProfile,
   updateUserProfile,
+  changePassword,
   verifyOTP,
   resendOTP,
   forgotPassword,
@@ -12,7 +13,12 @@ import {
   googleLogin,
 } from '../../controllers/customer/authController.js';
 import { protect } from '../../middleware/authMiddleware.js';
-import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middleware/rateLimitMiddleware.js';
+import {
+  loginLimiter,
+  otpEmailLimiter,
+  otpVerifyLimiter,
+  changePasswordLimiter,
+} from '../../middleware/rateLimitMiddleware.js';
 /**
  * @swagger
  * components:
@@ -32,6 +38,9 @@ import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middlewar
  *         avatar:
  *           type: string
  *           description: URL ảnh đại diện
+ *         coverImage:
+ *           type: string
+ *           description: URL ảnh bìa trang cá nhân ('' nếu chưa có)
  *         phone:
  *           type: string
  *           description: Số điện thoại
@@ -58,12 +67,36 @@ import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middlewar
  *         name: "John Doe"
  *         email: "john@example.com"
  *         avatar: ""
+ *         coverImage: ""
  *         phone: "0987654321"
  *         gender: "Nam"
  *         dateOfBirth: "2004-01-01"
  *         travelPreferences: ["Biển", "Cafe", "Ẩm thực"]
  *         favoriteBudget: "Trung bình"
  *         isAdmin: false
+ *
+ *     UserProfile:
+ *       allOf:
+ *         - $ref: '#/components/schemas/User'
+ *         - type: object
+ *           properties:
+ *             authType:
+ *               type: string
+ *               enum: [local, google]
+ *               description: Cách tạo tài khoản
+ *             hasPassword:
+ *               type: boolean
+ *               description: Tài khoản đã có mật khẩu chưa (false → FE hiện form "Tạo mật khẩu")
+ *             stats:
+ *               type: object
+ *               description: Chỉ có ở GET /auth/profile
+ *               properties:
+ *                 trips:
+ *                   type: integer
+ *                 favorites:
+ *                   type: integer
+ *                 reviews:
+ *                   type: integer
  */
 
 /**
@@ -152,11 +185,11 @@ import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middlewar
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Trả về thông tin cá nhân của user
+ *         description: Trả về thông tin cá nhân của user (kèm authType, hasPassword, stats)
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/User'
+ *               $ref: '#/components/schemas/UserProfile'
  *       401:
  *         description: Chưa xác thực (Không có token)
  *   put:
@@ -175,6 +208,9 @@ import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middlewar
  *                 type: string
  *               avatar:
  *                 type: string
+ *               coverImage:
+ *                 type: string
+ *                 description: URL http(s) từ POST /upload, hoặc '' để xóa ảnh bìa
  *               phone:
  *                 type: string
  *               gender:
@@ -190,19 +226,65 @@ import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middlewar
  *               favoriteBudget:
  *                 type: string
  *                 enum: [Tiết kiệm, Trung bình, Cao cấp, '']
- *               password:
- *                 type: string
  *     responses:
  *       200:
- *         description: Cập nhật thành công, trả về thông tin user mới
+ *         description: Cập nhật thành công, trả về thông tin user mới (kèm authType, hasPassword; không có stats)
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/User'
+ *               $ref: '#/components/schemas/UserProfile'
+ *       400:
+ *         description: coverImage không phải URL http(s) hợp lệ, hoặc body có `password` (phải dùng PUT /auth/change-password)
  *       401:
  *         description: Chưa xác thực
  *       404:
  *         description: Không tìm thấy User
+ */
+
+/**
+ * @swagger
+ * /auth/change-password:
+ *   put:
+ *     summary: Đổi mật khẩu (xác minh mật khẩu hiện tại) hoặc tạo mật khẩu lần đầu cho tài khoản Google
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - newPassword
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 description: Bắt buộc nếu tài khoản đã có mật khẩu (hasPassword = true)
+ *               newPassword:
+ *                 type: string
+ *                 description: Tối thiểu 6 ký tự, ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số
+ *           example:
+ *             currentPassword: "Abc123"
+ *             newPassword: "Newpass1"
+ *     responses:
+ *       200:
+ *         description: Đổi mật khẩu thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Đổi mật khẩu thành công!"
+ *       400:
+ *         description: Thiếu mật khẩu mới / thiếu hoặc sai mật khẩu hiện tại / mật khẩu mới yếu / trùng mật khẩu hiện tại
+ *       401:
+ *         description: Chưa xác thực (thiếu hoặc sai token)
+ *       429:
+ *         description: Thử sai quá 10 lần trong 15 phút
  */
 
 /**
@@ -355,5 +437,6 @@ router
   .route('/profile')
   .get(protect, getUserProfile)
   .put(protect, updateUserProfile);
+router.put('/change-password', protect, changePasswordLimiter, changePassword);
 
 export default router;

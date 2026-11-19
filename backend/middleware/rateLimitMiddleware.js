@@ -37,4 +37,11 @@ const otpVerifyLimiter = createLimiter({
   message: 'Bạn đã thử mã OTP quá nhiều lần. Vui lòng thử lại sau 15 phút!',
 });
 
-export { loginLimiter, otpEmailLimiter, otpVerifyLimiter };
+// Đổi mật khẩu: tối đa 10 lần THẤT BẠI / 15 phút / IP (chặn dò mật khẩu hiện tại khi lộ token)
+const changePasswordLimiter = createLimiter({
+  limit: 10,
+  skipSuccessfulRequests: true,
+  message: 'Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau 15 phút!',
+});
+
+export { loginLimiter, otpEmailLimiter, otpVerifyLimiter, changePasswordLimiter };

@@ -29,6 +29,11 @@ const userSchema = mongoose.Schema(
       type: String,
       default: '',
     },
+    // Ảnh bìa trang cá nhân (URL ảnh đã upload qua POST /api/upload)
+    coverImage: {
+      type: String,
+      default: '',
+    },
     phone: {
       type: String,
       default: '',

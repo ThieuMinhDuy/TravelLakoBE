@@ -160,6 +160,32 @@ const logoutUser = (req, res) => {
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
+/**
+ * Các trường hồ sơ trả về cho chính chủ tài khoản (GET/PUT /api/auth/profile).
+ * Không bao giờ trả hash mật khẩu hay OTP — chỉ trả cờ `hasPassword`.
+ */
+const buildProfileResponse = (user) => ({
+  _id: user._id,
+  name: user.name,
+  email: user.email,
+  avatar: user.avatar,
+  coverImage: user.coverImage,
+  phone: user.phone,
+  gender: user.gender,
+  dateOfBirth: user.dateOfBirth,
+  travelPreferences: user.travelPreferences,
+  favoriteBudget: user.favoriteBudget,
+  isAdmin: user.isAdmin,
+  authType: user.authType,
+  hasPassword: Boolean(user.password),
+});
+
+/** Chuỗi rỗng (xóa ảnh) hoặc URL http(s) hợp lệ */
+const isValidImageUrlOrEmpty = (value) =>
+  typeof value === 'string' &&
+  (value === '' ||
+    validator.isURL(value, { protocols: ['http', 'https'], require_protocol: true, require_tld: false }));
+
 // @desc    Get user profile
 // @route   GET /api/auth/profile
 // @access  Private
@@ -175,16 +201,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
     ]);
 
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      phone: user.phone,
-      gender: user.gender,
-      dateOfBirth: user.dateOfBirth,
-      travelPreferences: user.travelPreferences,
-      favoriteBudget: user.favoriteBudget,
-      isAdmin: user.isAdmin,
+      ...buildProfileResponse(user),
       stats: {
         trips: tripsCount,
         favorites: favoritesCount,
@@ -204,10 +221,25 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
 
   if (user) {
+    // Đổi mật khẩu phải qua PUT /api/auth/change-password (có xác minh mật khẩu hiện tại)
+    if (req.body.password !== undefined) {
+      res.status(400);
+      throw new Error('Vui lòng dùng chức năng Đổi mật khẩu');
+    }
+
+    if (req.body.coverImage !== undefined && !isValidImageUrlOrEmpty(req.body.coverImage)) {
+      res.status(400);
+      throw new Error('Ảnh bìa không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.');
+    }
+
     user.name = req.body.name || user.name;
-    
+
     if (req.body.avatar !== undefined) {
       user.avatar = req.body.avatar;
+    }
+
+    if (req.body.coverImage !== undefined) {
+      user.coverImage = req.body.coverImage;
     }
 
     if (req.body.phone !== undefined) {
@@ -230,28 +262,62 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       user.favoriteBudget = req.body.favoriteBudget;
     }
 
-    if (req.body.password) {
-      user.password = req.body.password;
-    }
-
     const updatedUser = await user.save();
 
-    res.json({
-      _id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      avatar: updatedUser.avatar,
-      phone: updatedUser.phone,
-      gender: updatedUser.gender,
-      dateOfBirth: updatedUser.dateOfBirth,
-      travelPreferences: updatedUser.travelPreferences,
-      favoriteBudget: updatedUser.favoriteBudget,
-      isAdmin: updatedUser.isAdmin,
-    });
+    res.json(buildProfileResponse(updatedUser));
   } else {
     res.status(404);
     throw new Error('User not found');
   }
+});
+
+// @desc    Change password (verify current password) or set first password (Google account)
+// @route   PUT /api/auth/change-password
+// @access  Private
+const changePassword = asyncHandler(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  if (!isNonEmptyString(newPassword)) {
+    res.status(400);
+    throw new Error('Vui lòng nhập mật khẩu mới!');
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  // Tài khoản đã có mật khẩu: bắt buộc xác minh mật khẩu hiện tại.
+  // Tài khoản Google chưa có mật khẩu: được đặt mật khẩu lần đầu mà không cần currentPassword.
+  // Lưu ý: lỗi nghiệp vụ dùng 400, KHÔNG dùng 401 (FE coi 401 là hết phiên và tự đăng xuất).
+  if (user.password) {
+    if (!isNonEmptyString(currentPassword)) {
+      res.status(400);
+      throw new Error('Vui lòng nhập mật khẩu hiện tại!');
+    }
+
+    if (!(await user.matchPassword(currentPassword))) {
+      res.status(400);
+      throw new Error('Mật khẩu hiện tại không chính xác!');
+    }
+  }
+
+  if (!validator.isStrongPassword(newPassword, STRONG_PASSWORD_OPTIONS)) {
+    res.status(400);
+    throw new Error('Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
+  }
+
+  if (user.password && (await user.matchPassword(newPassword))) {
+    res.status(400);
+    throw new Error('Mật khẩu mới phải khác mật khẩu hiện tại!');
+  }
+
+  // Hook pre-save của model sẽ tự hash
+  user.password = newPassword;
+  await user.save();
+
+  res.status(200).json({ message: 'Đổi mật khẩu thành công!' });
 });
 
 // @desc    Verify OTP for registration
@@ -508,6 +574,7 @@ export {
   logoutUser,
   getUserProfile,
   updateUserProfile,
+  changePassword,
   verifyOTP,
   resendOTP,
   forgotPassword,
