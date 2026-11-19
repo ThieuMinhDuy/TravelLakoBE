@@ -134,7 +134,9 @@ router.post('/', protect, createReview);
  *       200:
  *         description: Xóa thành công
  *       401:
- *         description: Không có quyền xóa
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu review
  *       404:
  *         description: Không tìm thấy đánh giá
  */

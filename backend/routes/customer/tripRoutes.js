@@ -156,7 +156,9 @@ router.route('/')
  *       200:
  *         description: Thành công
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  *       404:
  *         description: Không tìm thấy chuyến đi
  *   delete:
@@ -174,7 +176,9 @@ router.route('/')
  *       200:
  *         description: Xóa thành công
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  *       404:
  *         description: Không tìm thấy chuyến đi
  */
@@ -225,7 +229,9 @@ router.route('/:id')
  *       400:
  *         description: Thông tin không hợp lệ hoặc ngày không tồn tại
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  */
 router.post('/:id/schedule/places', protect, addPlaceToSchedule);
 
@@ -336,7 +342,9 @@ router.delete('/:id/schedule/places/:subId', protect, removePlaceFromSchedule);
  *       400:
  *         description: Thiếu trường dữ liệu visited
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  */
 router.patch('/:id/schedule/places/:subId/check-in', protect, checkInPlace);
 
@@ -375,7 +383,9 @@ router.patch('/:id/schedule/places/:subId/check-in', protect, checkInPlace);
  *       200:
  *         description: Cập nhật nhật ký thành công
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  */
 router.put('/:id/diary', protect, updateTripDiary);
 

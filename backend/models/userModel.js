@@ -65,6 +65,16 @@ const userSchema = mongoose.Schema(
         type: Date,
         default: null,
       },
+      // Số lần nhập sai mã hiện tại (quá giới hạn thì mã bị hủy)
+      attempts: {
+        type: Number,
+        default: 0,
+      },
+      // Thời điểm gửi mã gần nhất (dùng cho cooldown gửi lại)
+      lastSentAt: {
+        type: Date,
+        default: null,
+      },
     },
     isAdmin: {
       type: Boolean,

@@ -126,7 +126,7 @@ const deleteMyReview = asyncHandler(async (req, res) => {
 
   // Check review ownership
   if (review.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to delete this review');
   }
 

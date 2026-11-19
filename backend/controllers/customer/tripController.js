@@ -147,7 +147,7 @@ const getTripById = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to view this trip');
   }
 
@@ -167,7 +167,7 @@ const deleteTrip = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to delete this trip');
   }
 
@@ -201,7 +201,7 @@ const addPlaceToSchedule = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 
@@ -251,7 +251,7 @@ const removePlaceFromSchedule = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 
@@ -303,7 +303,7 @@ const reorderSchedulePlaces = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 
@@ -363,7 +363,7 @@ const checkInPlace = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 
@@ -408,7 +408,7 @@ const updateTripDiary = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 
@@ -442,7 +442,7 @@ const updateTripMetadata = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to modify this trip');
   }
 

@@ -9,7 +9,6 @@
     "server": "nodemon server.js",
     "client": "npm run dev --prefix ../frontend",
     "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "seed": "node seeder.js",
     "seed:vietnam": "node scripts/seedVietnam.js"
   },
   "author": "Brad Traversy",
@@ -22,6 +21,7 @@
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
     "express-async-handler": "^1.2.0",
+    "express-rate-limit": "^7.5.1",
     "google-auth-library": "^11.3.4",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^7.8.9",

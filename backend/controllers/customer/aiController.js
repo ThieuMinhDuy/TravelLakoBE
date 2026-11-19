@@ -428,6 +428,82 @@ const clearChatHistory = asyncHandler(async (req, res) => {
   res.json({ message: 'Đã xóa lịch sử cuộc trò chuyện.' });
 });
 
+/**
+ * Áp thứ tự mới từ `optimizedSchedule` (client gửi lên sau bước preview) vào lịch trình hiện tại.
+ * Kiểm tra: đúng các ngày của trip, mỗi ngày đúng tập địa điểm (placeType + placeId) như trong DB.
+ * Chỉ lấy từ client: thứ tự và note. Giữ nguyên _id, date, visited, checkInTime từ DB.
+ * @returns {Array} schedule mới để gán vào trip.schedule
+ */
+const applyOptimizedOrder = (trip, optimizedSchedule, res) => {
+  const fail = (message) => {
+    res.status(400);
+    return new Error(`Lịch trình tối ưu không hợp lệ: ${message}`);
+  };
+
+  if (!Array.isArray(optimizedSchedule)) {
+    throw fail('optimizedSchedule phải là một mảng các ngày.');
+  }
+
+  const proposedByDay = new Map();
+  for (const dayItem of optimizedSchedule) {
+    const day = Number(dayItem?.day);
+    if (!Number.isInteger(day) || proposedByDay.has(day) || !Array.isArray(dayItem.places)) {
+      throw fail('mỗi ngày phải có "day" (không trùng) và mảng "places".');
+    }
+    proposedByDay.set(day, dayItem.places);
+  }
+
+  if (proposedByDay.size !== trip.schedule.length) {
+    throw fail('số ngày không khớp với chuyến đi.');
+  }
+
+  const placeKey = (placeType, placeId) => {
+    // placeId có thể là chuỗi hoặc object đã populate ({ _id, ... })
+    const id = placeId && typeof placeId === 'object' ? placeId._id : placeId;
+    return `${placeType}:${String(id)}`;
+  };
+
+  return trip.schedule.map((dayItem) => {
+    const proposedPlaces = proposedByDay.get(dayItem.day);
+    if (!proposedPlaces) {
+      throw fail(`thiếu ngày ${dayItem.day}.`);
+    }
+    if (proposedPlaces.length !== dayItem.places.length) {
+      throw fail(`số địa điểm của ngày ${dayItem.day} không khớp.`);
+    }
+
+    // Gom các địa điểm gốc theo key (một địa điểm có thể xuất hiện nhiều lần trong ngày)
+    const pool = new Map();
+    for (const original of dayItem.places) {
+      const key = placeKey(original.placeType, original.placeId);
+      if (!pool.has(key)) pool.set(key, []);
+      pool.get(key).push(original);
+    }
+
+    const sortedProposed = [...proposedPlaces].sort(
+      (a, b) => (Number(a?.order) || 0) - (Number(b?.order) || 0)
+    );
+
+    const places = sortedProposed.map((proposed, idx) => {
+      const original = pool.get(placeKey(proposed?.placeType, proposed?.placeId))?.shift();
+      if (!original) {
+        throw fail(`ngày ${dayItem.day} chứa địa điểm không có trong chuyến đi.`);
+      }
+      return {
+        _id: original._id,
+        placeType: original.placeType,
+        placeId: original.placeId,
+        order: idx,
+        note: typeof proposed.note === 'string' ? proposed.note : original.note,
+        visited: original.visited,
+        checkInTime: original.checkInTime,
+      };
+    });
+
+    return { _id: dayItem._id, day: dayItem.day, date: dayItem.date, places };
+  });
+};
+
 // @desc    Optimize existing trip itinerary using AI based on location coordinates (Batch request)
 // @route   POST /api/ai/optimize/:tripId
 // @access  Private
@@ -438,9 +514,10 @@ const optimizeExistingTrip = asyncHandler(async (req, res) => {
     throw new Error('Chuyến đi không tồn tại hoặc bạn không có quyền chỉnh sửa.');
   }
 
-  // If frontend already has optimizedSchedule, save it directly to avoid double Gemini calls
+  // If frontend already has optimizedSchedule, save it directly to avoid double Gemini calls.
+  // Chỉ chấp nhận thay đổi THỨ TỰ (và note) của các địa điểm đang có trong trip.
   if (req.body.preview === false && req.body.optimizedSchedule) {
-    trip.schedule = req.body.optimizedSchedule;
+    trip.schedule = applyOptimizedOrder(trip, req.body.optimizedSchedule, res);
     const updatedTrip = await trip.save();
     return res.status(200).json(updatedTrip);
   }

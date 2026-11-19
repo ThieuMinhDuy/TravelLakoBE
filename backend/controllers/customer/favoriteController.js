@@ -95,7 +95,7 @@ const removeFavorite = asyncHandler(async (req, res) => {
 
   // Check ownership
   if (favorite.user.toString() !== req.user._id.toString()) {
-    res.status(401);
+    res.status(403);
     throw new Error('Not authorized to remove this favorite');
   }
 

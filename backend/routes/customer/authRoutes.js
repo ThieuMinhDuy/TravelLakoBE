@@ -12,6 +12,7 @@ import {
   googleLogin,
 } from '../../controllers/customer/authController.js';
 import { protect } from '../../middleware/authMiddleware.js';
+import { loginLimiter, otpEmailLimiter, otpVerifyLimiter } from '../../middleware/rateLimitMiddleware.js';
 /**
  * @swagger
  * components:
@@ -342,14 +343,14 @@ import { protect } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/register', registerUser);
-router.post('/login', authUser);
-router.post('/google', googleLogin);
+router.post('/register', otpEmailLimiter, registerUser);
+router.post('/login', loginLimiter, authUser);
+router.post('/google', loginLimiter, googleLogin);
 router.post('/logout', logoutUser);
-router.post('/verify-otp', verifyOTP);
-router.post('/resend-otp', resendOTP);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/verify-otp', otpVerifyLimiter, verifyOTP);
+router.post('/resend-otp', otpEmailLimiter, resendOTP);
+router.post('/forgot-password', otpEmailLimiter, forgotPassword);
+router.post('/reset-password', otpVerifyLimiter, resetPassword);
 router
   .route('/profile')
   .get(protect, getUserProfile)

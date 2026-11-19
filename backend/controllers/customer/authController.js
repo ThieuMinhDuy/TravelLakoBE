@@ -5,14 +5,34 @@ import User from '../../models/userModel.js';
 import Trip from '../../models/tripModel.js';
 import Favorite from '../../models/favoriteModel.js';
 import Review from '../../models/reviewModel.js';
-import generateToken from '../../utils/generateToken.js';
+import generateToken, { clearTokenCookie } from '../../utils/generateToken.js';
 import sendEmail from '../../utils/sendEmail.js';
+import { assertOtpCooldown, issueOtp, verifyOtpOrThrow, clearOtp } from '../../utils/otp.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const STRONG_PASSWORD_OPTIONS = {
+  minLength: 6,
+  minLowercase: 1,
+  minUppercase: 1,
+  minNumbers: 1,
+  minSymbols: 0,
+};
+
+/**
+ * Chỉ chấp nhận giá trị dạng chuỗi cho các field dùng làm điều kiện truy vấn
+ * (chặn payload kiểu { "email": { "$ne": null } } lọt vào User.findOne).
+ */
+const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
 // @desc    Auth user & get token
 const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+
+  if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
+    res.status(400);
+    throw new Error('Vui lòng nhập Email và Mật khẩu!');
+  }
 
   const user = await User.findOne({ email });
 
@@ -52,35 +72,23 @@ const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
   // 1. Kiểm tra các trường bắt buộc
-  if (!name || !email || !password || name.trim() === '' || email.trim() === '' || password.trim() === '') {
+  if (!isNonEmptyString(name) || !isNonEmptyString(email) || !isNonEmptyString(password)) {
     res.status(400);
     throw new Error('Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu!');
   }
 
   // 2. Kiểm tra định dạng email (Chỉ chấp nhận đuôi @gmail.com)
   const emailLower = email.toLowerCase();
-  if (!validator.isEmail(email) || (!emailLower.endsWith('@gmail.com') && !emailLower.endsWith('@gamil.com'))) {
+  if (!validator.isEmail(email) || !emailLower.endsWith('@gmail.com')) {
     res.status(400);
     throw new Error('Sai định dạng email!');
   }
 
   // 3. Kiểm tra độ mạnh của mật khẩu (Tối thiểu 6 ký tự, 1 chữ hoa, 1 chữ thường, 1 chữ số)
-  if (
-    !validator.isStrongPassword(password, {
-      minLength: 6,
-      minLowercase: 1,
-      minUppercase: 1,
-      minNumbers: 1,
-      minSymbols: 0,
-    })
-  ) {
+  if (!validator.isStrongPassword(password, STRONG_PASSWORD_OPTIONS)) {
     res.status(400);
     throw new Error('Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
   }
-
-  // Tạo mã OTP 6 chữ số ngẫu nhiên & hạn dùng 5 phút
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   // 4. Kiểm tra email đã tồn tại chưa
   const userExists = await User.findOne({ email });
@@ -91,9 +99,10 @@ const registerUser = asyncHandler(async (req, res) => {
       throw new Error('Email này đã được sử dụng!');
     } else {
       // Nếu email đã đăng ký nhưng chưa xác thực, cập nhật lại thông tin mới và gửi OTP mới
+      assertOtpCooldown(userExists, res);
       userExists.name = name;
       userExists.password = password;
-      userExists.otp = { code: otpCode, expiresAt: otpExpiresAt };
+      const otpCode = issueOtp(userExists);
       await userExists.save();
 
       // Gửi email OTP
@@ -113,16 +122,14 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // 5. Lưu user mới vào MongoDB với isVerified = false
-  const user = await User.create({
+  const user = new User({
     name,
     email,
     password,
     isVerified: false,
-    otp: {
-      code: otpCode,
-      expiresAt: otpExpiresAt,
-    },
   });
+  const otpCode = issueOtp(user);
+  await user.save();
 
   if (user) {
     // Gửi email OTP
@@ -149,10 +156,7 @@ const registerUser = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Public
 const logoutUser = (req, res) => {
-  res.cookie('jwt', '', {
-    httpOnly: true,
-    expires: new Date(0),
-  });
+  clearTokenCookie(res);
   res.status(200).json({ message: 'Logged out successfully' });
 };
 
@@ -256,7 +260,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 const verifyOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
 
-  if (!email || !otp) {
+  if (!isNonEmptyString(email) || otp === undefined || otp === null || String(otp).trim() === '') {
     res.status(400);
     throw new Error('Vui lòng cung cấp Email và mã OTP!');
   }
@@ -273,19 +277,12 @@ const verifyOTP = asyncHandler(async (req, res) => {
     throw new Error('Tài khoản này đã được xác thực trước đó!');
   }
 
-  if (!user.otp || user.otp.code !== otp) {
-    res.status(400);
-    throw new Error('Mã OTP không chính xác!');
-  }
-
-  if (user.otp.expiresAt < new Date()) {
-    res.status(400);
-    throw new Error('Mã OTP đã hết hạn! Vui lòng yêu cầu mã mới.');
-  }
+  // Sai mã -> tăng số lần thử; sai quá 5 lần -> hủy mã
+  await verifyOtpOrThrow(user, otp, res);
 
   // Xác thực thành công
   user.isVerified = true;
-  user.otp = { code: null, expiresAt: null };
+  clearOtp(user);
   await user.save();
 
   // Đăng nhập luôn cho user sau khi xác thực thành công
@@ -312,7 +309,7 @@ const verifyOTP = asyncHandler(async (req, res) => {
 const resendOTP = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
+  if (!isNonEmptyString(email)) {
     res.status(400);
     throw new Error('Vui lòng cung cấp Email!');
   }
@@ -324,10 +321,8 @@ const resendOTP = asyncHandler(async (req, res) => {
     throw new Error('Không tìm thấy người dùng!');
   }
 
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-  user.otp = { code: otpCode, expiresAt: otpExpiresAt };
+  assertOtpCooldown(user, res);
+  const otpCode = issueOtp(user);
   await user.save();
 
   await sendEmail({
@@ -347,7 +342,7 @@ const resendOTP = asyncHandler(async (req, res) => {
 const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
+  if (!isNonEmptyString(email)) {
     res.status(400);
     throw new Error('Vui lòng nhập Email!');
   }
@@ -364,10 +359,8 @@ const forgotPassword = asyncHandler(async (req, res) => {
     throw new Error('Tài khoản này chưa được xác thực email. Không thể sử dụng tính năng này!');
   }
 
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
-
-  user.otp = { code: otpCode, expiresAt: otpExpiresAt };
+  assertOtpCooldown(user, res);
+  const otpCode = issueOtp(user);
   await user.save();
 
   await sendEmail({
@@ -388,9 +381,19 @@ const forgotPassword = asyncHandler(async (req, res) => {
 const resetPassword = asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
 
-  if (!email || !otp || !newPassword) {
+  if (
+    !isNonEmptyString(email) ||
+    otp === undefined || otp === null || String(otp).trim() === '' ||
+    !isNonEmptyString(newPassword)
+  ) {
     res.status(400);
     throw new Error('Vui lòng cung cấp đầy đủ Email, mã OTP và Mật khẩu mới!');
+  }
+
+  // Kiểm tra mật khẩu mới có mạnh không (trước khi kiểm tra OTP để không tốn lượt thử)
+  if (!validator.isStrongPassword(newPassword, STRONG_PASSWORD_OPTIONS)) {
+    res.status(400);
+    throw new Error('Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
   }
 
   const user = await User.findOne({ email });
@@ -400,33 +403,12 @@ const resetPassword = asyncHandler(async (req, res) => {
     throw new Error('Không tìm thấy người dùng!');
   }
 
-  if (!user.otp || user.otp.code !== otp) {
-    res.status(400);
-    throw new Error('Mã OTP không chính xác!');
-  }
-
-  if (user.otp.expiresAt < new Date()) {
-    res.status(400);
-    throw new Error('Mã OTP đã hết hạn!');
-  }
-
-  // Kiểm tra mật khẩu mới có mạnh không
-  if (
-    !validator.isStrongPassword(newPassword, {
-      minLength: 6,
-      minLowercase: 1,
-      minUppercase: 1,
-      minNumbers: 1,
-      minSymbols: 0,
-    })
-  ) {
-    res.status(400);
-    throw new Error('Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
-  }
+  // Sai mã -> tăng số lần thử; sai quá 5 lần -> hủy mã
+  await verifyOtpOrThrow(user, otp, res);
 
   // Cập nhật mật khẩu mới (Mongoose pre-save hook sẽ tự động hash)
   user.password = newPassword;
-  user.otp = { code: null, expiresAt: null };
+  clearOtp(user);
   await user.save();
 
   res.status(200).json({ message: 'Đặt lại mật khẩu thành công! Bạn có thể đăng nhập bằng mật khẩu mới.' });
@@ -459,6 +441,12 @@ const googleLogin = asyncHandler(async (req, res) => {
   if (!payload || !payload.email) {
     res.status(400);
     throw new Error('Không thể lấy thông tin email từ Google Token!');
+  }
+
+  // Chỉ tin email đã được Google xác minh, tránh gộp nhầm vào tài khoản local có cùng email
+  if (payload.email_verified !== true) {
+    res.status(401);
+    throw new Error('Email Google của bạn chưa được xác minh!');
   }
 
   const { sub: googleId, email, name, picture } = payload;

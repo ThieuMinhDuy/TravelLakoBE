@@ -112,7 +112,9 @@ router.route('/')
  *       200:
  *         description: Xóa thành công
  *       401:
- *         description: Chưa đăng nhập hoặc không có quyền
+ *         description: Chưa đăng nhập
+ *       403:
+ *         description: Không phải chủ sở hữu
  *       404:
  *         description: Không tìm thấy bản ghi yêu thích
  */
