@@ -4,6 +4,7 @@ import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
+import escapeRegex from '../../utils/escapeRegex.js';
 
 // Helper to map route parameter type to the corresponding Mongoose Model
 const getModelByType = (type) => {
@@ -41,7 +42,7 @@ const getPlaces = asyncHandler(async (req, res) => {
   }
 
   if (req.query.search) {
-    query.name = { $regex: req.query.search, $options: 'i' };
+    query.name = { $regex: escapeRegex(req.query.search), $options: 'i' };
   }
 
   // 2. Type-specific filters
@@ -68,7 +69,7 @@ const getPlaces = asyncHandler(async (req, res) => {
 
   if (typeLower === 'restaurant') {
     if (req.query.cuisineType) {
-      query.cuisineType = { $regex: req.query.cuisineType, $options: 'i' };
+      query.cuisineType = { $regex: escapeRegex(req.query.cuisineType), $options: 'i' };
     }
     if (req.query.minPrice || req.query.maxPrice) {
       query.price = {};
@@ -123,7 +124,7 @@ const globalSearch = asyncHandler(async (req, res) => {
 
   const query = {};
   if (keyword) {
-    query.name = { $regex: keyword, $options: 'i' };
+    query.name = { $regex: escapeRegex(keyword), $options: 'i' };
   }
   if (cityId) {
     query.city = cityId;

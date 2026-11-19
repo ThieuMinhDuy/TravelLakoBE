@@ -35,13 +35,44 @@ function checkFileTypes(file, cb) {
   }
 }
 
+// Giới hạn dung lượng ảnh tải lên: 5MB
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
 // Multer upload middleware
 const upload = multer({
   storage,
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: function (req, file, cb) {
     checkFileTypes(file, cb);
   },
 });
+
+/**
+ * Bọc upload.single(field) để lỗi của multer (sai định dạng, quá dung lượng)
+ * trả về 400 thay vì rơi xuống errorHandler với mã 500.
+ */
+const uploadSingleImage = (field) => (req, res, next) => {
+  upload.single(field)(req, res, (err) => {
+    if (!err) return next();
+
+    res.status(400);
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return next(new Error('Ảnh vượt quá dung lượng cho phép (tối đa 5MB)'));
+    }
+    return next(err);
+  });
+};
+
+/** Xóa file tạm local nếu còn tồn tại (bỏ qua lỗi) */
+const removeLocalFile = (localFilePath) => {
+  try {
+    if (localFilePath && fs.existsSync(localFilePath)) {
+      fs.unlinkSync(localFilePath);
+    }
+  } catch (error) {
+    console.warn(`[Upload] Không thể xóa file tạm ${localFilePath}: ${error.message}`);
+  }
+};
 
 // Configure Cloudinary
 cloudinary.config({
@@ -60,16 +91,13 @@ const uploadToCloudinary = async (localFilePath) => {
     const result = await cloudinary.uploader.upload(localFilePath, {
       folder: 'travel_planner',
     });
-    // Remove local file after uploading to Cloudinary
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
     return result.secure_url;
   } catch (error) {
-    // If Cloudinary fails, we don't delete local file so it can still be served locally as fallback if needed,
-    // but here we throw error to let user know
     throw new Error(`Cloudinary upload failed: ${error.message}`);
+  } finally {
+    // Luôn xóa file tạm local (dù thành công hay thất bại) để tránh đầy thư mục uploads/
+    removeLocalFile(localFilePath);
   }
 };
 
-export { upload, uploadToCloudinary };
+export { upload, uploadSingleImage, uploadToCloudinary };
