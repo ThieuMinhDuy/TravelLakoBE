@@ -37,7 +37,14 @@ router.get('/vietnam-cities', getVietnamCities);
  *       Tên, địa chỉ, tọa độ lấy từ OpenStreetMap. Mô tả tiếng Việt và giá tham khảo (khách sạn thêm số sao,
  *       nhà hàng thêm loại ẩm thực) do Gemini viết; nếu Gemini chưa cấu hình, lỗi hoặc quá thời gian thì dùng
  *       mô tả mẫu + giá ngẫu nhiên (xem `enrichment` trong response). Ảnh luôn là ảnh mẫu.
- *       rating / numReviews của địa điểm mới luôn là 0. Có thể mất 30-60 giây.
+ *       rating / numReviews của địa điểm mới luôn là 0.
+ *
+ *       Chỉ lấy địa điểm có tên. Điểm tham quan lấy cả địa điểm vẽ dạng khu vực (hồ, công viên...), tọa độ là tâm khu vực.
+ *       Địa điểm đã có (trùng tên trong cùng thành phố) bị bỏ qua, nên import lại sẽ lấy thêm nhóm địa điểm tiếp theo.
+ *       Thành phố mới chỉ được tạo khi lấy dữ liệu OpenStreetMap thành công.
+ *
+ *       Thường mất 5-60 giây (máy chủ OpenStreetMap miễn phí hay quá tải). Server đang ngủ trên Render thì cộng thêm
+ *       khoảng 50 giây khởi động, nên FE đặt timeout cho request này khoảng 180 giây.
  *     tags: [Admin - Import]
  *     security:
  *       - cookieAuth: []
@@ -60,7 +67,7 @@ router.get('/vietnam-cities', getVietnamCities);
  *                 example: "Đà Lạt"
  *               limit:
  *                 type: number
- *                 description: Số địa điểm tối đa cho MỖI loại, từ 1 đến 50 (mặc định 30; lớn hơn 50 tính là 50)
+ *                 description: Số địa điểm MỚI tối đa cho MỖI loại, từ 1 đến 50 (mặc định 30; lớn hơn 50 tính là 50)
  *                 example: 30
  *     responses:
  *       200:
@@ -108,11 +115,27 @@ router.get('/vietnam-cities', getVietnamCities);
  *               stats: { hotelsImported: 2, attractionsImported: 1, restaurantsImported: 1, cafesImported: 1, totalImported: 5 }
  *               enrichment: { aiGenerated: 4, templateGenerated: 1, geminiEnabled: true, failedTypes: ["Attraction"] }
  *       400:
- *         description: Yêu cầu không hợp lệ hoặc thiếu tham số
+ *         description: |
+ *           Thiếu tham số (`MISSING_FIELDS`), hoặc không tìm thấy tọa độ của thành phố theo tên (`GEOCODE_FAILED`)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
- *         description: Không tìm thấy thành phố
+ *         description: Không tìm thấy thành phố theo cityId (`CITY_NOT_FOUND`)
  *       503:
- *         description: Máy chủ OpenStreetMap quá tải hoặc gặp sự cố
+ *         description: |
+ *           Máy chủ OpenStreetMap (Overpass / Nominatim) quá tải, lỗi hoặc quá thời gian (`OSM_UNAVAILABLE`).
+ *           Có `retryAfter` (số giây nên đợi trước khi thử lại). Không có thành phố mới nào bị tạo.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "All OpenStreetMap Overpass servers are currently busy or timed out. Please try again in a few moments."
+ *               code: OSM_UNAVAILABLE
+ *               retryAfter: 60
+ *               stack: null
  */
 router.post('/osm', importFromOSM);
 

@@ -48,12 +48,13 @@ const options = {
                                 "EMAIL_EXISTS", "INVALID_EMAIL", "WEAK_PASSWORD", "CURRENT_PASSWORD_INCORRECT",
                                 "SAME_PASSWORD", "GOOGLE_TOKEN_INVALID", "GOOGLE_EMAIL_UNVERIFIED",
                                 "OTP_INVALID", "OTP_EXPIRED", "OTP_ATTEMPTS_EXCEEDED", "OTP_COOLDOWN",
-                                "CITY_EXISTS", "CITY_NOT_FOUND", "CITY_HAS_PLACES", "CITY_HAS_TRIPS"
+                                "CITY_EXISTS", "CITY_NOT_FOUND", "CITY_HAS_PLACES", "CITY_HAS_TRIPS",
+                                "OSM_UNAVAILABLE", "GEOCODE_FAILED"
                             ]
                         },
                         retryAfter: {
                             type: "integer",
-                            description: "Chỉ có với OTP_COOLDOWN và RATE_LIMITED (429): số giây phải đợi trước khi thử lại"
+                            description: "Chỉ có với OTP_COOLDOWN, RATE_LIMITED (429) và OSM_UNAVAILABLE (503): số giây nên đợi trước khi thử lại"
                         },
                         stack: { type: "string", nullable: true, description: "Chỉ có khi NODE_ENV=development" }
                     },

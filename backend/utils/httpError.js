@@ -63,4 +63,7 @@ export const ERROR_CODES = Object.freeze({
   CITY_NOT_FOUND: 'CITY_NOT_FOUND', // 404 (API thành phố) hoặc 400 (city gửi kèm khi lưu địa điểm / import)
   CITY_HAS_PLACES: 'CITY_HAS_PLACES', // 400: xóa thành phố còn địa điểm khi chưa cascade
   CITY_HAS_TRIPS: 'CITY_HAS_TRIPS', // 400: xóa thành phố còn chuyến đi của người dùng
+  // Import OpenStreetMap
+  OSM_UNAVAILABLE: 'OSM_UNAVAILABLE', // 503: máy chủ OpenStreetMap (Overpass / Nominatim) quá tải, lỗi hoặc quá thời gian; body có retryAfter (số giây)
+  GEOCODE_FAILED: 'GEOCODE_FAILED', // 400: không tìm thấy tọa độ của thành phố theo tên (sai chính tả, không phải địa danh Việt Nam...)
 });

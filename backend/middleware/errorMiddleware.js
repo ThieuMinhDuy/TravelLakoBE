@@ -31,6 +31,8 @@ const validationMessage = (err) =>
 const errorHandler = (err, req, res, next) => {
   console.error(`[Server Error] ${req.method} ${req.originalUrl}:`, err);
   let statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  // HttpError tạo ở utils (không có res để đặt status, vd utils/osm.js): lấy status ghi trong lỗi
+  if (res.statusCode === 200 && err instanceof HttpError && Number.isInteger(err.status)) statusCode = err.status;
   let message = err.message;
   // Chỉ gửi code của lỗi do mình tạo (HttpError); err.code của Node / MongoDB / thư viện thì bỏ qua
   let code = err instanceof HttpError && typeof err.code === 'string' ? err.code : undefined;

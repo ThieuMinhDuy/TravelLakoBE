@@ -7,6 +7,7 @@ import Cafe from '../../models/cafeModel.js';
 import findCityByName from '../../utils/findCityByName.js';
 import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 import { enrichImportedPlaces } from '../../utils/importEnrichment.js';
+import { buildOverpassQuery, geocodeCity, queryOverpass } from '../../utils/osm.js';
 
 const DEFAULT_IMPORT_LIMIT = 30;
 const MAX_IMPORT_LIMIT = 50;
@@ -154,200 +155,134 @@ const buildPlaceData = (type, item, cityName, ai) => {
   }
 };
 
+// Mỗi loại lấy dư từ OSM (limit × 3, tối đa 150) rồi mới chọn `limit` địa điểm CHƯA có trong DB,
+// nhờ vậy import lại lần sau lấy được nhóm địa điểm tiếp theo thay vì nhận lại đúng các địa điểm cũ
+const FETCH_MULTIPLIER = 3;
+const MAX_FETCH_PER_TYPE = 150;
+
+const ATTRACTION_TOURISM_TAGS = ['attraction', 'museum', 'viewpoint'];
+
+/** Loại địa điểm của 1 phần tử OSM (thứ tự ưu tiên giữ như trước: khách sạn > nhà hàng > cafe > điểm tham quan) */
+const classifyOsmElement = (tags) => {
+  if (tags.tourism === 'hotel') return 'Hotel';
+  if (tags.amenity === 'restaurant') return 'Restaurant';
+  if (tags.amenity === 'cafe') return 'Cafe';
+  if (ATTRACTION_TOURISM_TAGS.includes(tags.tourism)) return 'Attraction';
+  return null;
+};
+
+/** Tên, địa chỉ, tọa độ của 1 phần tử OSM. Khu vực (way / relation) dùng tọa độ tâm (`center`) */
+const toPlaceItem = (el, city) => {
+  const tags = el.tags || {};
+  const name = (tags.name || tags.name_vi || tags.name_en || '').trim();
+  const lat = el.lat ?? el.center?.lat;
+  const lng = el.lon ?? el.center?.lon;
+  if (!name || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return {
+    name,
+    city: city._id,
+    address: tags['addr:street']
+      ? `${tags['addr:housenumber'] || ''} ${tags['addr:street']}`.trim()
+      : `${city.name}, Việt Nam`,
+    coordinates: { lat, lng },
+  };
+};
+
 // @desc    Import POIs from OpenStreetMap (OSM)
 // @route   POST /api/admin/import/osm
 // @access  Private/Admin
 const importFromOSM = asyncHandler(async (req, res) => {
-  let { cityId, cityName, limit } = req.body;
+  const { cityId, cityName, limit } = req.body;
 
   if (!cityId && !cityName) {
     throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
   }
 
-  let city;
+  // Số địa điểm MỚI tối đa cho MỖI loại theo tham số limit của Admin (1-50, mặc định 30).
+  // Chặn trên để prompt gửi Gemini và thời gian import không quá lớn.
+  const parsedLimit = Number.parseInt(limit, 10);
+  const perTypeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), MAX_IMPORT_LIMIT) : DEFAULT_IMPORT_LIMIT;
+
+  // 1. Xác định thành phố và tọa độ.
+  //    Thành phố chưa có thì chỉ lấy tọa độ từ Nominatim, CHƯA lưu: Overpass lỗi thì không để lại thành phố trống.
+  let city = null;
+  let newCityName = null;
+  let coordinates;
+
   if (cityId) {
-    // 1. Kiểm tra thành phố theo ID có tồn tại
     city = await City.findById(cityId);
     if (!city) {
       throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
     }
   } else {
-    // 2. Tìm theo tên thành phố, không phân biệt hoa/thường và dấu:
-    //    đã có "Da Lat" thì import "Đà Lạt" sẽ dùng lại thành phố đó, không tạo trùng
+    // Tìm theo tên thành phố, không phân biệt hoa/thường và dấu:
+    // đã có "Da Lat" thì import "Đà Lạt" sẽ dùng lại thành phố đó, không tạo trùng
     if (typeof cityName !== 'string' || !cityName.trim()) {
       throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
     }
-    const normalizedName = cityName.trim();
-    city = await findCityByName(normalizedName);
-
+    newCityName = cityName.trim();
+    city = await findCityByName(newCityName);
     if (!city) {
-      // Gọi API địa lý Nominatim miễn phí của OpenStreetMap để định vị tọa độ
-      console.log(`[Import Tool] Geocoding city name "${normalizedName}"...`);
-      const geocodeUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalizedName + ', Vietnam')}&format=json&limit=1`;
-      
-      try {
-        const geoRes = await fetch(geocodeUrl, {
-          headers: { 'User-Agent': 'TravelLakoPlannerAgent/1.0' }
-        });
-        const geoData = await geoRes.json();
-
-        if (!geoRes.ok || !geoData || geoData.length === 0) {
-          res.status(400);
-          throw new Error(`Không thể tìm thấy tọa độ cho thành phố "${normalizedName}". Vui lòng kiểm tra lại chính tả!`);
-        }
-
-        const lat = parseFloat(geoData[0].lat);
-        const lng = parseFloat(geoData[0].lon);
-
-        // Gán một ảnh phong cảnh ngẫu nhiên từ thư viện
-        const cityImages = SAMPLE_IMAGES.Attraction;
-        const randomCityImage = cityImages[Math.floor(Math.random() * cityImages.length)];
-
-        // Tạo thành phố mới lưu vào database
-        city = await City.create({
-          name: normalizedName,
-          description: `Thành phố du lịch nổi tiếng ${normalizedName}, Việt Nam.`,
-          image: randomCityImage,
-          coordinates: { lat, lng }
-        });
-        console.log(`[Import Tool] Created new city "${normalizedName}" at lat: ${lat}, lng: ${lng}`);
-      } catch (err) {
-        if (res.statusCode === 200) res.status(400);
-        throw new Error(err.message || 'Geocoding failed');
-      }
+      console.log(`[Import Tool] Geocoding city name "${newCityName}"...`);
+      coordinates = await geocodeCity(newCityName);
     }
   }
 
-  const { lat, lng } = city.coordinates || {};
-  if (!lat || !lng) {
-    res.status(400);
-    throw new Error('City coordinates are missing');
+  if (city) {
+    const { lat, lng } = city.coordinates || {};
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      res.status(400);
+      throw new Error('City coordinates are missing');
+    }
+    coordinates = { lat, lng };
   }
 
-  // Cập nhật lại cityId để dùng lưu địa điểm
-  cityId = city._id;
+  // 2. Lấy địa điểm quanh thành phố (bán kính khoảng 5-10km) từ Overpass
+  const perTypeFetch = Math.min(perTypeLimit * FETCH_MULTIPLIER, MAX_FETCH_PER_TYPE);
+  const { elements } = await queryOverpass(buildOverpassQuery(coordinates, perTypeFetch));
 
-  // 2. Tính toán Bounding Box (bán kính khoảng 5-10km bao quanh lat, lng)
-  const offset = 0.05;
-  const minLat = lat - offset;
-  const maxLat = lat + offset;
-  const minLng = lng - offset;
-  const maxLng = lng + offset;
-
-  // 3. Xây dựng truy vấn Overpass QL
-  const query = `
-    [out:json][timeout:25];
-    (
-      node["tourism"="hotel"](${minLat},${minLng},${maxLat},${maxLng});
-      node["amenity"="restaurant"](${minLat},${minLng},${maxLat},${maxLng});
-      node["amenity"="cafe"](${minLat},${minLng},${maxLat},${maxLng});
-      node["tourism"~"attraction|museum|viewpoint"](${minLat},${minLng},${maxLat},${maxLng});
-    );
-    out body 200;
-  `;
-
-  // Danh sách mirror Overpass API dự phòng
-  const mirrors = [
-    'https://lz4.overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass-api.de/api/interpreter'
-  ];
-
-  let osmData = null;
-  let successMirror = '';
-
-  // Gọi API với cơ chế Timeout và Fallback
-  for (const url of mirrors) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 giây timeout
-
-    try {
-      console.log(`[Import Tool] Querying OSM from: ${url}...`);
-      const targetUrl = `${url}?data=${encodeURIComponent(query)}`;
-      const response = await fetch(targetUrl, {
-        headers: { 'User-Agent': 'TravelLakoPlannerAgent/1.0' },
-        signal: controller.signal
+  // 3. Overpass thành công mới tạo thành phố mới
+  if (!city) {
+    // Một request import khác có thể đã tạo thành phố này trong lúc chờ Overpass
+    city = await findCityByName(newCityName);
+    if (!city) {
+      const cityImages = SAMPLE_IMAGES.Attraction;
+      city = await City.create({
+        name: newCityName,
+        description: `Thành phố du lịch nổi tiếng ${newCityName}, Việt Nam.`,
+        image: cityImages[Math.floor(Math.random() * cityImages.length)],
+        coordinates,
       });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        osmData = await response.json();
-        successMirror = url;
-        break; // Thành công thì thoát vòng lặp
-      } else {
-        console.warn(`[Import Tool] Mirror ${url} returned status: ${response.status}`);
-      }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      console.warn(`[Import Tool] Mirror ${url} failed or timed out: ${err.message}`);
+      console.log(`[Import Tool] Created new city "${newCityName}" at lat: ${coordinates.lat}, lng: ${coordinates.lng}`);
     }
   }
-
-  if (!osmData || !osmData.elements) {
-    res.status(503);
-    throw new Error('All OpenStreetMap Overpass servers are currently busy or timed out. Please try again in a few moments.');
-  }
-
-  console.log(`[Import Tool] Successfully fetched ${osmData.elements.length} elements from ${successMirror}`);
 
   // 4. Phân loại các phần tử OSM thu được
-  const fetchedHotels = [];
-  const fetchedAttractions = [];
-  const fetchedRestaurants = [];
-  const fetchedCafes = [];
-
-  osmData.elements.forEach(el => {
-    const name = el.tags.name || el.tags.name_en || el.tags.name_vi;
-    if (!name) return; // Bỏ qua địa điểm không có tên
-
-    const coordinates = { lat: el.lat, lng: el.lon };
-    const address = el.tags['addr:street'] 
-      ? `${el.tags['addr:housenumber'] || ''} ${el.tags['addr:street']}`.trim()
-      : `${city.name}, Việt Nam`;
-
-    const basePlace = {
-      name,
-      city: cityId,
-      address,
-      coordinates,
-    };
-
-    if (el.tags.tourism === 'hotel') {
-      fetchedHotels.push(basePlace);
-    } else if (el.tags.amenity === 'restaurant') {
-      fetchedRestaurants.push(basePlace);
-    } else if (el.tags.amenity === 'cafe') {
-      fetchedCafes.push(basePlace);
-    } else if (['attraction', 'museum', 'viewpoint'].includes(el.tags.tourism)) {
-      fetchedAttractions.push(basePlace);
-    }
-  });
-
-  // Giới hạn số lượng nhập cho MỖI loại theo tham số limit của Admin (1-50, mặc định 30).
-  // Chặn trên để prompt gửi Gemini và thời gian import không quá lớn.
-  const parsedLimit = Number.parseInt(limit, 10);
-  const perTypeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), MAX_IMPORT_LIMIT) : DEFAULT_IMPORT_LIMIT;
-
-  // 5. Lọc ra địa điểm CHƯA có trong DB (chống trùng theo tên + thành phố, kể cả trùng trong cùng lần import)
-  //    Không ghi rating / numReviews: để mặc định 0, chỉ đánh giá thật của người dùng mới tính điểm
   const groups = [
-    { type: 'Hotel', Model: Hotel, items: fetchedHotels, statKey: 'hotelsImported' },
-    { type: 'Attraction', Model: Attraction, items: fetchedAttractions, statKey: 'attractionsImported' },
-    { type: 'Restaurant', Model: Restaurant, items: fetchedRestaurants, statKey: 'restaurantsImported' },
-    { type: 'Cafe', Model: Cafe, items: fetchedCafes, statKey: 'cafesImported' },
-  ];
+    { type: 'Hotel', Model: Hotel, statKey: 'hotelsImported' },
+    { type: 'Attraction', Model: Attraction, statKey: 'attractionsImported' },
+    { type: 'Restaurant', Model: Restaurant, statKey: 'restaurantsImported' },
+    { type: 'Cafe', Model: Cafe, statKey: 'cafesImported' },
+  ].map((group) => ({ ...group, items: [] }));
+  const groupByType = Object.fromEntries(groups.map((g) => [g.type, g]));
 
-  for (const group of groups) {
-    const seen = new Set();
-    group.newItems = [];
-    for (const item of group.items.slice(0, perTypeLimit)) {
-      if (seen.has(item.name)) continue;
-      seen.add(item.name);
-      const exists = await group.Model.exists({ name: item.name, city: cityId });
-      if (!exists) group.newItems.push(item);
-    }
+  for (const el of elements) {
+    const type = classifyOsmElement(el.tags || {});
+    const item = type && toPlaceItem(el, city);
+    if (item) groupByType[type].items.push(item);
   }
+
+  // 5. Chọn tối đa `limit` địa điểm CHƯA có trong DB cho mỗi loại
+  //    (chống trùng theo tên + thành phố, kể cả trùng trong cùng lần import; mỗi loại 1 truy vấn DB)
+  //    Không ghi rating / numReviews: để mặc định 0, chỉ đánh giá thật của người dùng mới tính điểm
+  await Promise.all(groups.map(async (group) => {
+    const seen = new Set();
+    const candidates = group.items.filter((item) => !seen.has(item.name) && seen.add(item.name));
+    const existing = candidates.length
+      ? new Set(await group.Model.distinct('name', { city: city._id, name: { $in: candidates.map((item) => item.name) } }))
+      : new Set();
+    group.newItems = candidates.filter((item) => !existing.has(item.name)).slice(0, perTypeLimit);
+  }));
 
   // 6. Gemini viết mô tả + giá tham khảo (mỗi loại 1 lần gọi, chạy song song).
   //    Gemini lỗi / chưa cấu hình thì dùng mô tả mẫu + giá ngẫu nhiên như trước.
@@ -357,27 +292,36 @@ const importFromOSM = asyncHandler(async (req, res) => {
     timeoutMs: Number(process.env.GEMINI_IMPORT_TIMEOUT_MS) || undefined,
   });
 
-  // 7. Lưu vào DB
+  // 7. Lưu vào DB: mỗi loại 1 lần insertMany. Địa điểm không qua validate (hiếm) thì bỏ qua và ghi log.
   const stats = {};
   let aiGenerated = 0;
   let templateGenerated = 0;
 
-  for (const group of groups) {
-    stats[group.statKey] = 0;
+  await Promise.all(groups.map(async (group) => {
     const aiDetails = enrichment.details[group.type] || [];
-    for (const [i, item] of group.newItems.entries()) {
+    const docs = [];
+    group.newItems.forEach((item, i) => {
       const ai = aiDetails[i] || null;
-      await group.Model.create(buildPlaceData(group.type, item, city.name, ai));
-      stats[group.statKey]++;
+      const data = buildPlaceData(group.type, item, city.name, ai);
+      const invalid = new group.Model(data).validateSync();
+      if (invalid) {
+        console.warn(`[Import Tool] Bỏ qua ${group.type} "${item.name}": ${invalid.message}`);
+        return;
+      }
+      docs.push(data);
       if (ai) aiGenerated++;
       else templateGenerated++;
-    }
-  }
-  stats.totalImported = aiGenerated + templateGenerated;
+    });
+    if (docs.length) await group.Model.insertMany(docs);
+    stats[group.statKey] = docs.length;
+  }));
+  // Giữ thứ tự field của stats như trước
+  const orderedStats = Object.fromEntries(groups.map((g) => [g.statKey, stats[g.statKey]]));
+  orderedStats.totalImported = aiGenerated + templateGenerated;
 
   res.json({
     message: `Successfully imported places for ${city.name} from OpenStreetMap`,
-    stats,
+    stats: orderedStats,
     enrichment: {
       // Số địa điểm có mô tả + giá do Gemini viết / do mẫu có sẵn sinh ngẫu nhiên
       aiGenerated,
