@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
@@ -30,6 +31,18 @@ const EDITABLE_FIELDS = {
   hotel: [...COMMON_FIELDS, 'stars', 'pricePerNight'],
   restaurant: [...COMMON_FIELDS, 'cuisineType', 'price'],
   cafe: [...COMMON_FIELDS, 'price'],
+};
+
+/**
+ * Kiểm tra thành phố gửi lên có tồn tại. ID sai định dạng cũng trả 400 "City not found"
+ * (trước đây rơi vào CastError -> 404 "Resource not found", dễ nhầm là không tìm thấy địa điểm).
+ */
+const assertCityExists = async (cityId, res) => {
+  const cityExists = mongoose.isValidObjectId(cityId) ? await City.exists({ _id: cityId }) : null;
+  if (!cityExists) {
+    res.status(400);
+    throw new Error('City not found');
+  }
 };
 
 /** Lấy ra các field hợp lệ từ body theo loại địa điểm */
@@ -99,15 +112,13 @@ const createPlace = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('City is required');
   }
-  const cityExists = await City.findById(req.body.city);
-  if (!cityExists) {
-    res.status(400);
-    throw new Error('City not found');
-  }
+  await assertCityExists(req.body.city, res);
 
   // Chỉ nhận các field được phép (không cho tự đặt rating, numReviews, _id...)
   const place = new Model(pickEditableFields(req.params.type, req.body));
   const createdPlace = await place.save();
+  // Trả city dạng { _id, name } giống GET danh sách để FE cập nhật cache trực tiếp
+  await createdPlace.populate('city', 'name');
   res.status(201).json(createdPlace);
 });
 
@@ -122,12 +133,8 @@ const updatePlace = asyncHandler(async (req, res) => {
   }
 
   // Validate if city exists if it is being updated
-  if (req.body.city) {
-    const cityExists = await City.findById(req.body.city);
-    if (!cityExists) {
-      res.status(400);
-      throw new Error('City not found');
-    }
+  if (req.body.city !== undefined) {
+    await assertCityExists(req.body.city, res);
   }
 
   const place = await Model.findById(req.params.id);
@@ -149,6 +156,7 @@ const updatePlace = asyncHandler(async (req, res) => {
     });
 
     const updatedPlace = await place.save();
+    await updatedPlace.populate('city', 'name');
     res.json(updatedPlace);
   } else {
     res.status(404);
