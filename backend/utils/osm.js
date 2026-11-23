@@ -1,8 +1,8 @@
 // Gọi các dịch vụ miễn phí của OpenStreetMap dùng cho import:
 //   - Nominatim: tìm tọa độ thành phố theo tên
 //   - Overpass: lấy khách sạn / nhà hàng / cafe / điểm tham quan quanh tọa độ đó
-// Các máy chủ Overpass công cộng rất hay quá tải (lúc trả trong 2 giây, lúc treo quá 100 giây),
-// nên gọi theo kiểu "gối đầu" qua nhiều máy chủ và có hạn chót tổng.
+// Các máy chủ Overpass công cộng rất hay quá tải (lúc trả trong 2 giây, lúc treo quá 100 giây, lúc báo 502 "at capacity"),
+// nên gọi song song nhiều máy chủ, máy chủ nào lỗi thì nghỉ rồi gọi lại, có hạn chót tổng.
 import { HttpError, ERROR_CODES } from './httpError.js';
 
 const USER_AGENT = 'TravelLakoPlannerAgent/1.0';
@@ -12,9 +12,9 @@ const OSM_BUSY_MESSAGE = 'All OpenStreetMap Overpass servers are currently busy 
 const OSM_RETRY_AFTER_SECONDS = 60;
 
 const DEFAULT_OVERPASS_MIRRORS = [
-  'https://overpass.private.coffee/api/interpreter',
-  'https://lz4.overpass-api.de/api/interpreter',
   'https://overpass-api.de/api/interpreter',
+  'https://lz4.overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
 ];
 
 const envNumber = (name, fallback) => {
@@ -103,70 +103,56 @@ const queryMirror = async (url, query, signal) => {
   return data;
 };
 
+/** Đợi `ms`, hoặc dừng sớm khi signal bị hủy */
+const wait = (ms, signal) => new Promise((resolve) => {
+  const timer = setTimeout(resolve, ms);
+  signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+});
+
 /**
- * Gọi gối đầu qua các máy chủ Overpass:
- *  - gọi máy chủ 1; sau `hedgeMs` chưa có kết quả thì gọi thêm máy chủ kế tiếp (máy chủ trước vẫn chạy tiếp);
- *  - máy chủ nào báo lỗi mà không còn request nào đang chạy thì gọi máy chủ kế tiếp ngay, không chờ;
+ * Gọi song song các máy chủ Overpass, mỗi máy chủ một vòng "gọi, lỗi thì nghỉ rồi gọi lại" cho tới hạn chót:
+ *  - lỗi 502 "at capacity" / 504 / 429 / JSON hỏng / remark "runtime error" chỉ là tạm thời: nghỉ rồi gọi lại
+ *    (nghỉ 4 giây, mỗi lần lỗi tiếp theo nghỉ lâu hơn 1,5 lần, tối đa 15 giây, để không dồn tải lên máy chủ đang quá tải);
+ *  - mỗi máy chủ chỉ có tối đa 1 request đang chạy;
  *  - máy chủ nào trả kết quả hợp lệ trước thì dùng, các request còn lại bị hủy;
- *  - quá `deadlineMs` hoặc mọi máy chủ đều lỗi -> 503 OSM_UNAVAILABLE.
+ *  - quá `deadlineMs` mà chưa máy chủ nào trả kết quả -> 503 OSM_UNAVAILABLE.
  * @returns {Promise<{ elements: object[], mirror: string }>}
  */
-export const queryOverpass = (query, {
+export const queryOverpass = async (query, {
   mirrors = getOverpassMirrors(),
-  hedgeMs = envNumber('OVERPASS_HEDGE_MS', 10000),
-  deadlineMs = envNumber('OVERPASS_DEADLINE_MS', 60000),
-} = {}) => new Promise((resolve, reject) => {
+  deadlineMs = envNumber('OVERPASS_DEADLINE_MS', 90000),
+  retryDelayMs = envNumber('OVERPASS_RETRY_DELAY_MS', 4000),
+  maxRetryDelayMs = envNumber('OVERPASS_MAX_RETRY_DELAY_MS', 15000),
+} = {}) => {
+  const controller = new AbortController();
   const startedAt = Date.now();
-  const controllers = [];
-  let next = 0;
-  let running = 0;
-  let settled = false;
-  let hedgeTimer = null;
-  let deadlineTimer = null;
+  const deadline = setTimeout(() => controller.abort(), deadlineMs);
 
-  const finish = (fn, value) => {
-    if (settled) return;
-    settled = true;
-    clearTimeout(hedgeTimer);
-    clearTimeout(deadlineTimer);
-    controllers.forEach((c) => c.abort());
-    fn(value);
+  const worker = async (url) => {
+    for (let attempt = 1; !controller.signal.aborted; attempt++) {
+      const t0 = Date.now();
+      console.log(`[Import Tool] Overpass: gọi ${url} (lần ${attempt})`);
+      try {
+        const data = await queryMirror(url, query, controller.signal);
+        console.log(`[Import Tool] Overpass: ${url} trả ${data.elements.length} phần tử sau ${seconds(Date.now() - t0)} (lần ${attempt})`);
+        return { elements: data.elements, mirror: url };
+      } catch (err) {
+        if (controller.signal.aborted) break; // hết hạn chót, hoặc máy chủ khác đã trả kết quả
+        const delay = Math.min(retryDelayMs * 1.5 ** (attempt - 1), maxRetryDelayMs);
+        console.warn(`[Import Tool] Overpass: ${url} lỗi sau ${seconds(Date.now() - t0)}: ${err.message}; gọi lại sau ${seconds(delay)}`);
+        await wait(delay, controller.signal);
+      }
+    }
+    throw new Error('Đã dừng');
   };
 
-  const launch = () => {
-    clearTimeout(hedgeTimer);
-    if (settled || next >= mirrors.length) return;
-    const url = mirrors[next++];
-    const controller = new AbortController();
-    controllers.push(controller);
-    running++;
-    const t0 = Date.now();
-    console.log(`[Import Tool] Overpass: gọi ${url}`);
-
-    queryMirror(url, query, controller.signal).then(
-      (data) => {
-        console.log(`[Import Tool] Overpass: ${url} trả ${data.elements.length} phần tử sau ${seconds(Date.now() - t0)}`);
-        finish(resolve, { elements: data.elements, mirror: url });
-      },
-      (err) => {
-        running--;
-        if (settled) return; // request bị hủy vì máy chủ khác đã trả kết quả / đã hết hạn chót
-        console.warn(`[Import Tool] Overpass: ${url} lỗi sau ${seconds(Date.now() - t0)}: ${err.message}`);
-        if (running > 0) return; // còn máy chủ đang chạy: chờ nó hoặc tới lượt gối đầu kế tiếp
-        if (next < mirrors.length) launch();
-        else {
-          console.warn(`[Import Tool] Overpass: tất cả máy chủ đều lỗi (${seconds(Date.now() - startedAt)})`);
-          finish(reject, osmUnavailable());
-        }
-      },
-    );
-
-    if (next < mirrors.length) hedgeTimer = setTimeout(launch, hedgeMs);
-  };
-
-  deadlineTimer = setTimeout(() => {
-    console.warn(`[Import Tool] Overpass: hết hạn chót ${seconds(deadlineMs)}, hủy các request đang chạy`);
-    finish(reject, osmUnavailable());
-  }, deadlineMs);
-  launch();
-});
+  try {
+    return await Promise.any(mirrors.map(worker));
+  } catch {
+    console.warn(`[Import Tool] Overpass: không máy chủ nào trả kết quả trong ${seconds(Date.now() - startedAt)}`);
+    throw osmUnavailable();
+  } finally {
+    clearTimeout(deadline);
+    controller.abort(); // hủy các request / lượt chờ còn lại
+  }
+};

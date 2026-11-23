@@ -43,8 +43,8 @@ router.get('/vietnam-cities', getVietnamCities);
  *       Địa điểm đã có (trùng tên trong cùng thành phố) bị bỏ qua, nên import lại sẽ lấy thêm nhóm địa điểm tiếp theo.
  *       Thành phố mới chỉ được tạo khi lấy dữ liệu OpenStreetMap thành công.
  *
- *       Thường mất 5-60 giây (máy chủ OpenStreetMap miễn phí hay quá tải). Server đang ngủ trên Render thì cộng thêm
- *       khoảng 50 giây khởi động, nên FE đặt timeout cho request này khoảng 180 giây.
+ *       Thường mất 5-90 giây: máy chủ OpenStreetMap miễn phí hay quá tải, backend gọi lại tới tối đa 90 giây.
+ *       Server đang ngủ trên Render thì cộng thêm khoảng 50 giây khởi động, nên FE đặt timeout cho request này khoảng 210 giây.
  *     tags: [Admin - Import]
  *     security:
  *       - cookieAuth: []
