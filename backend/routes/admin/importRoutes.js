@@ -23,14 +23,8 @@ router.use(protect, admin);
  *             schema:
  *               type: array
  *               items:
- *                 type: object
- *                 properties:
- *                   _id:
- *                     type: string
- *                   name:
- *                     type: string
- *                   state:
- *                     type: string
+ *                 type: string
+ *               example: ["An Giang", "Đà Nẵng", "Hà Nội", "Đà Lạt"]
  */
 router.get('/vietnam-cities', getVietnamCities);
 
@@ -48,12 +42,17 @@ router.get('/vietnam-cities', getVietnamCities);
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - cityId
+ *             description: Gửi `cityId` hoặc `cityName` (một trong hai)
  *             properties:
  *               cityId:
  *                 type: string
- *                 description: ID của thành phố cần import
+ *                 description: ID của thành phố đã có trong hệ thống
+ *               cityName:
+ *                 type: string
+ *                 description: |
+ *                   Tên thành phố. Nếu đã có thành phố trùng tên (không phân biệt hoa/thường và dấu,
+ *                   vd "Da Lat" = "Đà Lạt") thì dùng lại thành phố đó; chưa có thì tự tạo mới (tọa độ lấy từ Nominatim).
+ *                 example: "Đà Lạt"
  *               limit:
  *                 type: number
  *                 description: Giới hạn số lượng địa điểm cào cho mỗi nhóm (mặc định 30)

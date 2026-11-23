@@ -4,7 +4,7 @@ import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
-import escapeRegex from '../../utils/escapeRegex.js';
+import findCityByName from '../../utils/findCityByName.js';
 
 // Kho ảnh Unsplash mẫu chất lượng cao cho từng danh mục
 const SAMPLE_IMAGES = {
@@ -134,9 +134,14 @@ const importFromOSM = asyncHandler(async (req, res) => {
       throw new Error('City not found');
     }
   } else {
-    // 2. Tìm theo tên thành phố (không phân biệt hoa thường)
+    // 2. Tìm theo tên thành phố, không phân biệt hoa/thường và dấu:
+    //    đã có "Da Lat" thì import "Đà Lạt" sẽ dùng lại thành phố đó, không tạo trùng
+    if (typeof cityName !== 'string' || !cityName.trim()) {
+      res.status(400);
+      throw new Error('Please provide either cityId or cityName');
+    }
     const normalizedName = cityName.trim();
-    city = await City.findOne({ name: { $regex: new RegExp(`^${escapeRegex(normalizedName)}$`, 'i') } });
+    city = await findCityByName(normalizedName);
 
     if (!city) {
       // Gọi API địa lý Nominatim miễn phí của OpenStreetMap để định vị tọa độ
@@ -289,6 +294,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   const targetCafes = fetchedCafes.slice(0, limit);
 
   // 5. Hàm lưu và chống trùng lặp dữ liệu vào DB
+  //    Không ghi rating / numReviews: để mặc định 0, chỉ đánh giá thật của người dùng mới tính điểm
   const importStats = {
     hotels: 0,
     attractions: 0,
@@ -306,8 +312,6 @@ const importFromOSM = asyncHandler(async (req, res) => {
         images: getRandomImages('Hotel', 5),
         stars: Math.floor(Math.random() * 3) + 3, // 3 - 5 sao
         pricePerNight: (Math.floor(Math.random() * 6) + 2) * 400000, // 800k - 3.2tr
-        rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)), // 4.0 - 4.8
-        numReviews: Math.floor(Math.random() * 25) + 5 // 5 - 30 reviews
       });
       importStats.hotels++;
     }
@@ -323,8 +327,6 @@ const importFromOSM = asyncHandler(async (req, res) => {
         description: generateDescription(item.name, city.name, 'Attraction'),
         images: getRandomImages('Attraction', 5),
         admissionFee: fees[Math.floor(Math.random() * fees.length)],
-        rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
-        numReviews: Math.floor(Math.random() * 25) + 5
       });
       importStats.attractions++;
     }
@@ -342,8 +344,6 @@ const importFromOSM = asyncHandler(async (req, res) => {
         images: getRandomImages('Restaurant', 5),
         cuisineType: cuisines[Math.floor(Math.random() * cuisines.length)],
         price: prices[Math.floor(Math.random() * prices.length)],
-        rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
-        numReviews: Math.floor(Math.random() * 25) + 5
       });
       importStats.restaurants++;
     }
@@ -359,8 +359,6 @@ const importFromOSM = asyncHandler(async (req, res) => {
         description: generateDescription(item.name, city.name, 'Cafe'),
         images: getRandomImages('Cafe', 5),
         price: prices[Math.floor(Math.random() * prices.length)],
-        rating: parseFloat((Math.random() * 0.8 + 4.0).toFixed(1)),
-        numReviews: Math.floor(Math.random() * 25) + 5
       });
       importStats.cafes++;
     }
