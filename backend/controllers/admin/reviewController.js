@@ -5,11 +5,27 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 
+// Nhận itemType không phân biệt hoa/thường ("hotel" giống :type của API địa điểm, hoặc "Hotel")
+const ITEM_TYPE_MAP = {
+  attraction: 'Attraction',
+  hotel: 'Hotel',
+  restaurant: 'Restaurant',
+  cafe: 'Cafe',
+};
+
 // @desc    Get all reviews
 // @route   GET /api/admin/reviews
 // @access  Private/Admin
 const getReviews = asyncHandler(async (req, res) => {
-  const { city, itemType, itemId } = req.query;
+  const { city, itemId } = req.query;
+  let itemType;
+  if (req.query.itemType !== undefined && req.query.itemType !== '') {
+    itemType = ITEM_TYPE_MAP[String(req.query.itemType).toLowerCase()];
+    if (!itemType) {
+      res.status(400);
+      throw new Error('Loại địa điểm không hợp lệ. Chỉ nhận: attraction, hotel, restaurant, cafe');
+    }
+  }
   const filter = {};
 
   if (itemId) {
@@ -55,6 +71,7 @@ const getReviews = asyncHandler(async (req, res) => {
 
   // Populate user info, and dynamically populate the referenced place (Attraction, Hotel, Restaurant, Cafe)
   const reviews = await Review.find(filter)
+    .sort({ createdAt: -1 }) // Mới nhất trước
     .populate('user', 'name email avatar')
     .populate({
       path: 'itemId',

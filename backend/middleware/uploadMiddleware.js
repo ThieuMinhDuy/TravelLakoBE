@@ -74,12 +74,22 @@ const removeLocalFile = (localFilePath) => {
   }
 };
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+/** Làm sạch giá trị biến môi trường: bỏ khoảng trắng/xuống dòng và dấu nháy bao ngoài (lỗi hay gặp khi dán vào Render) */
+const cleanEnv = (value) => (value || '').trim().replace(/^(['"])(.*)\1$/, '$2').trim();
+
+/**
+ * Đọc cấu hình Cloudinary TẠI THỜI ĐIỂM GỌI, không đọc lúc import module:
+ * với ES module, mọi import chạy trước dotenv.config() trong server.js nên lúc import
+ * các biến trong .env chưa có. Trả về null nếu thiếu bất kỳ biến nào.
+ */
+const getCloudinaryCredentials = () => {
+  const cloud_name = cleanEnv(process.env.CLOUDINARY_CLOUD_NAME);
+  const api_key = cleanEnv(process.env.CLOUDINARY_API_KEY);
+  const api_secret = cleanEnv(process.env.CLOUDINARY_API_SECRET);
+  return cloud_name && api_key && api_secret ? { cloud_name, api_key, api_secret } : null;
+};
+
+const isCloudinaryConfigured = () => getCloudinaryCredentials() !== null;
 
 /**
  * Upload a local file to Cloudinary and clean up the local file afterwards.
@@ -88,16 +98,23 @@ cloudinary.config({
  */
 const uploadToCloudinary = async (localFilePath) => {
   try {
+    cloudinary.config(getCloudinaryCredentials());
     const result = await cloudinary.uploader.upload(localFilePath, {
       folder: 'travel_planner',
     });
     return result.secure_url;
   } catch (error) {
-    throw new Error(`Cloudinary upload failed: ${error.message}`);
+    // Ghi chi tiết ở log server, chỉ trả câu dễ hiểu cho client
+    console.error('[Upload] Cloudinary error:', error?.http_code, error?.message);
+    const message = String(error?.message || '');
+    if (error?.http_code === 401 || /invalid signature|api[ _]key|cloud[ _]name/i.test(message)) {
+      throw new Error('Máy chủ cấu hình lưu trữ ảnh (Cloudinary) chưa đúng. Vui lòng báo quản trị viên!');
+    }
+    throw new Error('Tải ảnh lên thất bại, vui lòng thử lại!');
   } finally {
     // Luôn xóa file tạm local (dù thành công hay thất bại) để tránh đầy thư mục uploads/
     removeLocalFile(localFilePath);
   }
 };
 
-export { upload, uploadSingleImage, uploadToCloudinary };
+export { upload, uploadSingleImage, uploadToCloudinary, isCloudinaryConfigured, removeLocalFile };

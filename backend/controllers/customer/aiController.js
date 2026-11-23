@@ -6,17 +6,10 @@ import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import Trip from '../../models/tripModel.js';
 import Chat from '../../models/chatModel.js';
+import { toSearchKey } from '../../utils/text.js';
 
-// Helper function to normalize text (remove Vietnamese accents and convert to lowercase)
-const normalizeText = (text) => {
-  if (!text) return '';
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .trim();
-};
+// Bỏ dấu tiếng Việt + chữ thường để so khớp tên (dùng chung với import / quản lý thành phố)
+const normalizeText = toSearchKey;
 
 // @desc    Generate trip schedule suggestion using Gemini AI
 // @route   POST /api/ai/suggest

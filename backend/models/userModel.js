@@ -61,24 +61,31 @@ const userSchema = mongoose.Schema(
       required: true,
       default: false,
     },
+    // OTP không bao giờ được trả ra ngoài: mọi truy vấn mặc định không lấy các field này.
+    // Chỗ nào cần đọc/ghi OTP thì dùng .select(OTP_SELECT) (utils/otp.js).
+    // Lưu ý: không dùng .select('-otp') vì sẽ xung đột (Path collision) với select: false bên dưới.
     otp: {
       code: {
         type: String,
         default: null,
+        select: false,
       },
       expiresAt: {
         type: Date,
         default: null,
+        select: false,
       },
       // Số lần nhập sai mã hiện tại (quá giới hạn thì mã bị hủy)
       attempts: {
         type: Number,
         default: 0,
+        select: false,
       },
       // Thời điểm gửi mã gần nhất (dùng cho cooldown gửi lại)
       lastSentAt: {
         type: Date,
         default: null,
+        select: false,
       },
     },
     isAdmin: {

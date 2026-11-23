@@ -1,9 +1,10 @@
 import rateLimit from 'express-rate-limit';
+import { ERROR_CODES } from '../utils/httpError.js';
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
 /**
- * Tạo limiter theo IP, trả lỗi 429 cùng format { message } với errorHandler
+ * Tạo limiter theo IP, trả lỗi 429 cùng format { message, code } với errorHandler
  * để FE hiển thị được thông báo.
  */
 const createLimiter = ({ limit, windowMs = FIFTEEN_MINUTES, message, skipSuccessfulRequests = false }) =>
@@ -14,7 +15,7 @@ const createLimiter = ({ limit, windowMs = FIFTEEN_MINUTES, message, skipSuccess
     legacyHeaders: false,
     skipSuccessfulRequests,
     handler: (req, res, next, options) => {
-      res.status(options.statusCode).json({ message });
+      res.status(options.statusCode).json({ message, code: ERROR_CODES.RATE_LIMITED });
     },
   });
 

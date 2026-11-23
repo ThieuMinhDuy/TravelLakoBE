@@ -1,10 +1,14 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import Review from '../../models/reviewModel.js';
+import Favorite from '../../models/favoriteModel.js';
+import Trip from '../../models/tripModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 
 // Helper to map route parameter type to the corresponding Mongoose Model
 const getModelByType = (type) => {
@@ -30,6 +34,17 @@ const EDITABLE_FIELDS = {
   hotel: [...COMMON_FIELDS, 'stars', 'pricePerNight'],
   restaurant: [...COMMON_FIELDS, 'cuisineType', 'price'],
   cafe: [...COMMON_FIELDS, 'price'],
+};
+
+/**
+ * Kiểm tra thành phố gửi lên có tồn tại. ID sai định dạng cũng trả 400 "City not found"
+ * (trước đây rơi vào CastError -> 404 "Resource not found", dễ nhầm là không tìm thấy địa điểm).
+ */
+const assertCityExists = async (cityId, res) => {
+  const cityExists = mongoose.isValidObjectId(cityId) ? await City.exists({ _id: cityId }) : null;
+  if (!cityExists) {
+    throw httpError(res, 400, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+  }
 };
 
 /** Lấy ra các field hợp lệ từ body theo loại địa điểm */
@@ -96,18 +111,15 @@ const createPlace = asyncHandler(async (req, res) => {
 
   // Validate if city exists
   if (!req.body.city) {
-    res.status(400);
-    throw new Error('City is required');
+    throw httpError(res, 400, 'City is required', ERROR_CODES.MISSING_FIELDS);
   }
-  const cityExists = await City.findById(req.body.city);
-  if (!cityExists) {
-    res.status(400);
-    throw new Error('City not found');
-  }
+  await assertCityExists(req.body.city, res);
 
   // Chỉ nhận các field được phép (không cho tự đặt rating, numReviews, _id...)
   const place = new Model(pickEditableFields(req.params.type, req.body));
   const createdPlace = await place.save();
+  // Trả city dạng { _id, name } giống GET danh sách để FE cập nhật cache trực tiếp
+  await createdPlace.populate('city', 'name');
   res.status(201).json(createdPlace);
 });
 
@@ -122,12 +134,8 @@ const updatePlace = asyncHandler(async (req, res) => {
   }
 
   // Validate if city exists if it is being updated
-  if (req.body.city) {
-    const cityExists = await City.findById(req.body.city);
-    if (!cityExists) {
-      res.status(400);
-      throw new Error('City not found');
-    }
+  if (req.body.city !== undefined) {
+    await assertCityExists(req.body.city, res);
   }
 
   const place = await Model.findById(req.params.id);
@@ -149,6 +157,7 @@ const updatePlace = asyncHandler(async (req, res) => {
     });
 
     const updatedPlace = await place.save();
+    await updatedPlace.populate('city', 'name');
     res.json(updatedPlace);
   } else {
     res.status(404);
@@ -169,11 +178,23 @@ const deletePlace = asyncHandler(async (req, res) => {
   const place = await Model.findById(req.params.id);
 
   if (place) {
-    // Xóa tất cả reviews liên quan đến địa điểm này
-    await Review.deleteMany({ itemId: req.params.id });
+    // Xóa đánh giá, mục yêu thích của địa điểm này và gỡ nó khỏi lịch trình các chuyến đi
+    // (trước đây lịch trình còn giữ placeId, populate ra null)
+    const [, , tripUpdate] = await Promise.all([
+      Review.deleteMany({ itemId: place._id }),
+      Favorite.deleteMany({ itemId: place._id }),
+      Trip.updateMany(
+        { 'schedule.places.placeId': place._id },
+        { $pull: { 'schedule.$[].places': { placeId: place._id } } }
+      ),
+    ]);
 
-    await Model.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Place removed successfully along with associated reviews' });
+    await Model.deleteOne({ _id: place._id });
+    res.json({
+      message: 'Place removed successfully along with associated reviews',
+      // Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình
+      affectedTrips: tripUpdate.modifiedCount,
+    });
   } else {
     res.status(404);
     throw new Error('Place not found');

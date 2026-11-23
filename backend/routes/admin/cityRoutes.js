@@ -21,12 +21,11 @@ router.use(protect, admin);
  *       type: object
  *       required:
  *         - name
- *         - description
- *         - image
+ *         - coordinates
  *       properties:
  *         name:
  *           type: string
- *           description: Tên thành phố
+ *           description: Tên thành phố (không được trùng, so khớp không phân biệt hoa/thường và dấu)
  *         description:
  *           type: string
  *           description: Mô tả về thành phố
@@ -99,7 +98,7 @@ router.use(protect, admin);
  *             schema:
  *               $ref: '#/components/schemas/City'
  *       400:
- *         description: Thành phố đã tồn tại hoặc dữ liệu thiếu
+ *         description: Tên trống, thành phố đã tồn tại ("City already exists", kể cả khi chỉ khác dấu như "Da Lat" / "Đà Lạt") hoặc dữ liệu thiếu
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -137,6 +136,9 @@ router.use(protect, admin);
  * 
  *   put:
  *     summary: Cập nhật thông tin thành phố (Admin)
+ *     description: |
+ *       Chỉ cập nhật các field có gửi lên. Gửi `description: ""` hoặc `image: ""` để xóa mô tả / ảnh.
+ *       `coordinates` có thể gửi một phần (chỉ `lat` hoặc chỉ `lng`).
  *     tags: [Admin - City]
  *     security:
  *       - cookieAuth: []
@@ -160,15 +162,22 @@ router.use(protect, admin);
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/City'
+ *       400:
+ *         description: Tên gửi lên rỗng hoặc trùng với thành phố khác ("City already exists")
  *       401:
  *         description: Chưa xác thực
  *       403:
  *         description: Không có quyền Admin
  *       404:
  *         description: Không tìm thấy thành phố
- * 
+ *
  *   delete:
  *     summary: Xóa thành phố (Admin)
+ *     description: |
+ *       - Còn chuyến đi của người dùng ở thành phố này: luôn chặn (400, `code: CITY_HAS_TRIPS`), kể cả khi `cascade=true`.
+ *       - Còn địa điểm mà không có `cascade=true`: 400, `code: CITY_HAS_PLACES`, `requiresCascade: true` để FE hỏi xác nhận.
+ *       - `cascade=true`: xóa thành phố cùng toàn bộ địa điểm, đánh giá, mục yêu thích của các địa điểm đó
+ *         và gỡ chúng khỏi lịch trình chuyến đi (nếu có).
  *     tags: [Admin - City]
  *     security:
  *       - cookieAuth: []
@@ -179,6 +188,12 @@ router.use(protect, admin);
  *         schema:
  *           type: string
  *         description: ID của thành phố
+ *       - in: query
+ *         name: cascade
+ *         schema:
+ *           type: string
+ *           enum: ["true"]
+ *         description: Xác nhận xóa luôn các địa điểm thuộc thành phố
  *     responses:
  *       200:
  *         description: Xóa thành công
@@ -189,7 +204,18 @@ router.use(protect, admin);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "City removed successfully"
+ *                   example: "Thành phố đã được xóa thành công!"
+ *       400:
+ *         description: Còn chuyến đi (CITY_HAS_TRIPS) hoặc còn địa điểm mà chưa cascade (CITY_HAS_PLACES)
+ *         content:
+ *           application/json:
+ *             examples:
+ *               conTrip:
+ *                 summary: Còn chuyến đi
+ *                 value: { message: "Không thể xóa thành phố này vì đang có 2 chuyến đi của người dùng.", code: "CITY_HAS_TRIPS", totalTrips: 2 }
+ *               conDiaDiem:
+ *                 summary: Còn địa điểm, chưa cascade
+ *                 value: { message: "Thành phố này đang chứa 5 địa điểm. Bạn có muốn xóa ...?", code: "CITY_HAS_PLACES", requiresCascade: true, totalPlaces: 5 }
  *       401:
  *         description: Chưa xác thực
  *       403:

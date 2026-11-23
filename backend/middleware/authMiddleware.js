@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import asyncHandler from 'express-async-handler';
 import User from '../models/userModel.js';
+import { httpError, ERROR_CODES } from '../utils/httpError.js';
 
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -20,26 +21,22 @@ const protect = asyncHandler(async (req, res, next) => {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       console.error(error);
-      res.status(401);
-      throw new Error('Not authorized, token failed');
+      throw httpError(res, 401, 'Not authorized, token failed', ERROR_CODES.TOKEN_INVALID);
     }
 
     req.user = await User.findById(decoded.userId).select('-password');
 
     if (!req.user) {
-      res.status(401);
-      throw new Error('Người dùng không tồn tại hoặc đã bị xóa!');
+      throw httpError(res, 401, 'Người dùng không tồn tại hoặc đã bị xóa!', ERROR_CODES.USER_NOT_FOUND);
     }
 
     if (req.user.isBlocked) {
-      res.status(403);
-      throw new Error('Tài khoản của bạn đã bị khóa!');
+      throw httpError(res, 403, 'Tài khoản của bạn đã bị khóa!', ERROR_CODES.ACCOUNT_BLOCKED);
     }
 
     next();
   } else {
-    res.status(401);
-    throw new Error('Not authorized, no token');
+    throw httpError(res, 401, 'Not authorized, no token', ERROR_CODES.AUTH_REQUIRED);
   }
 });
 
@@ -47,8 +44,7 @@ const admin = (req, res, next) => {
   if (req.user && req.user.isAdmin) {
     next();
   } else {
-    res.status(403);
-    throw new Error('Not authorized as an admin');
+    throw httpError(res, 403, 'Not authorized as an admin', ERROR_CODES.NOT_ADMIN);
   }
 };
 

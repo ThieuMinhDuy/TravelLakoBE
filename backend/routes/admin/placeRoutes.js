@@ -243,9 +243,9 @@ router.use(protect, admin);
  *               - $ref: '#/components/schemas/CafeInput'
  *     responses:
  *       201:
- *         description: Tạo thành công
+ *         description: Tạo thành công. `city` trả dạng object `{ _id, name }` giống GET danh sách
  *       400:
- *         description: Dữ liệu gửi lên lỗi hoặc không tìm thấy City
+ *         description: Dữ liệu gửi lên lỗi (thiếu field bắt buộc, giá trị ngoài khoảng) hoặc không tìm thấy City ("City not found", kể cả ID sai định dạng)
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -311,16 +311,19 @@ router.use(protect, admin);
  *               - $ref: '#/components/schemas/CafeInput'
  *     responses:
  *       200:
- *         description: Cập nhật thành công
+ *         description: Cập nhật thành công. `city` trả dạng object `{ _id, name }` giống GET danh sách
+ *       400:
+ *         description: Dữ liệu lỗi hoặc thành phố mới không tồn tại ("City not found")
  *       401:
  *         description: Chưa xác thực
  *       403:
  *         description: Không có quyền Admin
  *       404:
- *         description: Không tìm thấy địa điểm hoặc thành phố
+ *         description: Không tìm thấy địa điểm
  * 
  *   delete:
  *     summary: Xóa địa điểm (Admin)
+ *     description: Xóa luôn đánh giá, mục yêu thích của địa điểm và gỡ nó khỏi lịch trình các chuyến đi.
  *     tags: [Admin - Places]
  *     security:
  *       - cookieAuth: []
@@ -346,7 +349,11 @@ router.use(protect, admin);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Place removed successfully"
+ *                   example: "Place removed successfully along with associated reviews"
+ *                 affectedTrips:
+ *                   type: number
+ *                   description: Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình
+ *                   example: 1
  *       401:
  *         description: Chưa xác thực
  *       403:
