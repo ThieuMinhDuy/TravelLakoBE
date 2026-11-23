@@ -8,6 +8,7 @@ import Review from '../../models/reviewModel.js';
 import generateToken, { clearTokenCookie } from '../../utils/generateToken.js';
 import sendEmail from '../../utils/sendEmail.js';
 import { assertOtpCooldown, issueOtp, verifyOtpOrThrow, clearOtp, OTP_SELECT } from '../../utils/otp.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -30,8 +31,7 @@ const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
   if (!isNonEmptyString(email) || !isNonEmptyString(password)) {
-    res.status(400);
-    throw new Error('Vui lòng nhập Email và Mật khẩu!');
+    throw httpError(res, 400, 'Vui lòng nhập Email và Mật khẩu!', ERROR_CODES.MISSING_FIELDS);
   }
 
   const user = await User.findOne({ email });
@@ -39,14 +39,12 @@ const authUser = asyncHandler(async (req, res) => {
   if (user && (await user.matchPassword(password))) {
     // Chặn đăng nhập nếu tài khoản bị khóa
     if (user.isBlocked) {
-      res.status(403);
-      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!');
+      throw httpError(res, 403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!', ERROR_CODES.ACCOUNT_BLOCKED);
     }
 
     // Chặn đăng nhập nếu chưa xác thực email
     if (!user.isVerified) {
-      res.status(400);
-      throw new Error('Tài khoản chưa được xác thực. Vui lòng xác thực email trước!');
+      throw httpError(res, 400, 'Tài khoản chưa được xác thực. Vui lòng xác thực email trước!', ERROR_CODES.ACCOUNT_UNVERIFIED);
     }
 
     const token = generateToken(res, user._id);
@@ -60,8 +58,7 @@ const authUser = asyncHandler(async (req, res) => {
       token,
     });
   } else {
-    res.status(401);
-    throw new Error('Invalid email or password');
+    throw httpError(res, 401, 'Invalid email or password', ERROR_CODES.INVALID_CREDENTIALS);
   }
 });
 
@@ -73,8 +70,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // 1. Kiểm tra các trường bắt buộc
   if (!isNonEmptyString(name) || !isNonEmptyString(email) || !isNonEmptyString(password)) {
-    res.status(400);
-    throw new Error('Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu!');
+    throw httpError(res, 400, 'Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu!', ERROR_CODES.MISSING_FIELDS);
   }
 
   // 2. Kiểm tra định dạng email (Chỉ chấp nhận đuôi @gmail.com)
@@ -95,8 +91,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
   if (userExists) {
     if (userExists.isVerified) {
-      res.status(400);
-      throw new Error('Email này đã được sử dụng!');
+      throw httpError(res, 400, 'Email này đã được sử dụng!', ERROR_CODES.EMAIL_EXISTS);
     } else {
       // Nếu email đã đăng ký nhưng chưa xác thực, cập nhật lại thông tin mới và gửi OTP mới
       assertOtpCooldown(userExists, res);
@@ -327,8 +322,7 @@ const verifyOTP = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
 
   if (!isNonEmptyString(email) || otp === undefined || otp === null || String(otp).trim() === '') {
-    res.status(400);
-    throw new Error('Vui lòng cung cấp Email và mã OTP!');
+    throw httpError(res, 400, 'Vui lòng cung cấp Email và mã OTP!', ERROR_CODES.MISSING_FIELDS);
   }
 
   const user = await User.findOne({ email }).select(OTP_SELECT);
@@ -376,8 +370,7 @@ const resendOTP = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
   if (!isNonEmptyString(email)) {
-    res.status(400);
-    throw new Error('Vui lòng cung cấp Email!');
+    throw httpError(res, 400, 'Vui lòng cung cấp Email!', ERROR_CODES.MISSING_FIELDS);
   }
 
   const user = await User.findOne({ email }).select(OTP_SELECT);
@@ -409,8 +402,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
 
   if (!isNonEmptyString(email)) {
-    res.status(400);
-    throw new Error('Vui lòng nhập Email!');
+    throw httpError(res, 400, 'Vui lòng nhập Email!', ERROR_CODES.MISSING_FIELDS);
   }
 
   const user = await User.findOne({ email }).select(OTP_SELECT);
@@ -452,8 +444,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     otp === undefined || otp === null || String(otp).trim() === '' ||
     !isNonEmptyString(newPassword)
   ) {
-    res.status(400);
-    throw new Error('Vui lòng cung cấp đầy đủ Email, mã OTP và Mật khẩu mới!');
+    throw httpError(res, 400, 'Vui lòng cung cấp đầy đủ Email, mã OTP và Mật khẩu mới!', ERROR_CODES.MISSING_FIELDS);
   }
 
   // Kiểm tra mật khẩu mới có mạnh không (trước khi kiểm tra OTP để không tốn lượt thử)
@@ -524,8 +515,7 @@ const googleLogin = asyncHandler(async (req, res) => {
 
   if (user) {
     if (user.isBlocked) {
-      res.status(403);
-      throw new Error('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!');
+      throw httpError(res, 403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên!', ERROR_CODES.ACCOUNT_BLOCKED);
     }
 
     let isUpdated = false;

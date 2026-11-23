@@ -5,6 +5,7 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import findCityByName from '../../utils/findCityByName.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 import { enrichImportedPlaces } from '../../utils/importEnrichment.js';
 
 const DEFAULT_IMPORT_LIMIT = 30;
@@ -160,8 +161,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   let { cityId, cityName, limit } = req.body;
 
   if (!cityId && !cityName) {
-    res.status(400);
-    throw new Error('Please provide either cityId or cityName');
+    throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
   }
 
   let city;
@@ -169,15 +169,13 @@ const importFromOSM = asyncHandler(async (req, res) => {
     // 1. Kiểm tra thành phố theo ID có tồn tại
     city = await City.findById(cityId);
     if (!city) {
-      res.status(404);
-      throw new Error('City not found');
+      throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
     }
   } else {
     // 2. Tìm theo tên thành phố, không phân biệt hoa/thường và dấu:
     //    đã có "Da Lat" thì import "Đà Lạt" sẽ dùng lại thành phố đó, không tạo trùng
     if (typeof cityName !== 'string' || !cityName.trim()) {
-      res.status(400);
-      throw new Error('Please provide either cityId or cityName');
+      throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
     }
     const normalizedName = cityName.trim();
     city = await findCityByName(normalizedName);
