@@ -5,6 +5,16 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import Review from '../../models/reviewModel.js';
+import findCityByName from '../../utils/findCityByName.js';
+
+/** Kiểm tra tên thành phố hợp lệ, trả về tên đã trim (ném 400 nếu rỗng) */
+const requireCityName = (name, res) => {
+  if (typeof name !== 'string' || !name.trim()) {
+    res.status(400);
+    throw new Error('Tên thành phố không được để trống');
+  }
+  return name.trim();
+};
 
 // @desc    Get all cities
 // @route   GET /api/admin/cities
@@ -36,8 +46,10 @@ const getCityById = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const createCity = asyncHandler(async (req, res) => {
   const { name, description, image, coordinates } = req.body;
+  const normalizedName = requireCityName(name, res);
 
-  const cityExists = await City.findOne({ name });
+  // So khớp không phân biệt hoa/thường và dấu: đã có "Da Lat" thì không tạo thêm "Đà Lạt"
+  const cityExists = await findCityByName(normalizedName);
 
   if (cityExists) {
     res.status(400);
@@ -45,7 +57,7 @@ const createCity = asyncHandler(async (req, res) => {
   }
 
   const city = new City({
-    name,
+    name: normalizedName,
     description,
     image,
     coordinates,
@@ -64,10 +76,19 @@ const updateCity = asyncHandler(async (req, res) => {
   const city = await City.findById(req.params.id);
 
   if (city) {
-    city.name = name || city.name;
-    city.description = description || city.description;
-    city.image = image || city.image;
-    if (coordinates) {
+    // Chỉ cập nhật field có gửi lên (kể cả chuỗi rỗng, để xóa được mô tả / ảnh)
+    if (name !== undefined) {
+      const normalizedName = requireCityName(name, res);
+      const duplicate = await findCityByName(normalizedName, { excludeId: city._id });
+      if (duplicate) {
+        res.status(400);
+        throw new Error('City already exists');
+      }
+      city.name = normalizedName;
+    }
+    if (description !== undefined) city.description = description ?? '';
+    if (image !== undefined) city.image = image ?? '';
+    if (coordinates && typeof coordinates === 'object') {
       city.coordinates = {
         lat: coordinates.lat !== undefined ? coordinates.lat : city.coordinates.lat,
         lng: coordinates.lng !== undefined ? coordinates.lng : city.coordinates.lng,
