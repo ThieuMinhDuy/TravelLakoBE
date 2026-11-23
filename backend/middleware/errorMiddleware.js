@@ -60,6 +60,8 @@ const errorHandler = (err, req, res, next) => {
   }
 
   res.status(statusCode).json({
+    // Field bổ sung của HttpError (vd retryAfter), đặt trước để không ghi đè được message / code / stack
+    ...(err instanceof HttpError && err.extra ? err.extra : {}),
     message: message,
     // Mã lỗi cố định để FE nhận diện (không có với lỗi chưa được phân loại)
     code,

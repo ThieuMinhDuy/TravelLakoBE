@@ -19,7 +19,9 @@ export const assertOtpCooldown = (user, res) => {
   const elapsed = Date.now() - new Date(lastSentAt).getTime();
   if (elapsed < OTP_RESEND_COOLDOWN_MS) {
     const waitSeconds = Math.ceil((OTP_RESEND_COOLDOWN_MS - elapsed) / 1000);
-    throw httpError(res, 429, `Vui lòng đợi ${waitSeconds} giây trước khi yêu cầu mã OTP mới!`, ERROR_CODES.OTP_COOLDOWN);
+    throw httpError(res, 429, `Vui lòng đợi ${waitSeconds} giây trước khi yêu cầu mã OTP mới!`, ERROR_CODES.OTP_COOLDOWN, {
+      retryAfter: waitSeconds,
+    });
   }
 };
 

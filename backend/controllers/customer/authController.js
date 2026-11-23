@@ -76,14 +76,12 @@ const registerUser = asyncHandler(async (req, res) => {
   // 2. Kiểm tra định dạng email (Chỉ chấp nhận đuôi @gmail.com)
   const emailLower = email.toLowerCase();
   if (!validator.isEmail(email) || !emailLower.endsWith('@gmail.com')) {
-    res.status(400);
-    throw new Error('Sai định dạng email!');
+    throw httpError(res, 400, 'Sai định dạng email!', ERROR_CODES.INVALID_EMAIL);
   }
 
   // 3. Kiểm tra độ mạnh của mật khẩu (Tối thiểu 6 ký tự, 1 chữ hoa, 1 chữ thường, 1 chữ số)
   if (!validator.isStrongPassword(password, STRONG_PASSWORD_OPTIONS)) {
-    res.status(400);
-    throw new Error('Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
+    throw httpError(res, 400, 'Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!', ERROR_CODES.WEAK_PASSWORD);
   }
 
   // 4. Kiểm tra email đã tồn tại chưa
@@ -142,8 +140,7 @@ const registerUser = asyncHandler(async (req, res) => {
       email,
     });
   } else {
-    res.status(400);
-    throw new Error('Dữ liệu người dùng không hợp lệ');
+    throw httpError(res, 400, 'Dữ liệu người dùng không hợp lệ', ERROR_CODES.VALIDATION_ERROR);
   }
 });
 
@@ -204,8 +201,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
       },
     });
   } else {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -218,13 +214,11 @@ const updateUserProfile = asyncHandler(async (req, res) => {
   if (user) {
     // Đổi mật khẩu phải qua PUT /api/auth/change-password (có xác minh mật khẩu hiện tại)
     if (req.body.password !== undefined) {
-      res.status(400);
-      throw new Error('Vui lòng dùng chức năng Đổi mật khẩu');
+      throw httpError(res, 400, 'Vui lòng dùng chức năng Đổi mật khẩu', ERROR_CODES.VALIDATION_ERROR);
     }
 
     if (req.body.coverImage !== undefined && !isValidImageUrlOrEmpty(req.body.coverImage)) {
-      res.status(400);
-      throw new Error('Ảnh bìa không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.');
+      throw httpError(res, 400, 'Ảnh bìa không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.', ERROR_CODES.VALIDATION_ERROR);
     }
 
     user.name = req.body.name || user.name;
@@ -261,8 +255,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
     res.json(buildProfileResponse(updatedUser));
   } else {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -273,14 +266,12 @@ const changePassword = asyncHandler(async (req, res) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!isNonEmptyString(newPassword)) {
-    res.status(400);
-    throw new Error('Vui lòng nhập mật khẩu mới!');
+    throw httpError(res, 400, 'Vui lòng nhập mật khẩu mới!', ERROR_CODES.MISSING_FIELDS);
   }
 
   const user = await User.findById(req.user._id);
   if (!user) {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
   }
 
   // Tài khoản đã có mật khẩu: bắt buộc xác minh mật khẩu hiện tại.
@@ -288,24 +279,20 @@ const changePassword = asyncHandler(async (req, res) => {
   // Lưu ý: lỗi nghiệp vụ dùng 400, KHÔNG dùng 401 (FE coi 401 là hết phiên và tự đăng xuất).
   if (user.password) {
     if (!isNonEmptyString(currentPassword)) {
-      res.status(400);
-      throw new Error('Vui lòng nhập mật khẩu hiện tại!');
+      throw httpError(res, 400, 'Vui lòng nhập mật khẩu hiện tại!', ERROR_CODES.MISSING_FIELDS);
     }
 
     if (!(await user.matchPassword(currentPassword))) {
-      res.status(400);
-      throw new Error('Mật khẩu hiện tại không chính xác!');
+      throw httpError(res, 400, 'Mật khẩu hiện tại không chính xác!', ERROR_CODES.CURRENT_PASSWORD_INCORRECT);
     }
   }
 
   if (!validator.isStrongPassword(newPassword, STRONG_PASSWORD_OPTIONS)) {
-    res.status(400);
-    throw new Error('Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
+    throw httpError(res, 400, 'Mật khẩu phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!', ERROR_CODES.WEAK_PASSWORD);
   }
 
   if (user.password && (await user.matchPassword(newPassword))) {
-    res.status(400);
-    throw new Error('Mật khẩu mới phải khác mật khẩu hiện tại!');
+    throw httpError(res, 400, 'Mật khẩu mới phải khác mật khẩu hiện tại!', ERROR_CODES.SAME_PASSWORD);
   }
 
   // Hook pre-save của model sẽ tự hash
@@ -328,13 +315,11 @@ const verifyOTP = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
-    res.status(404);
-    throw new Error('Không tìm thấy người dùng!');
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 
   if (user.isVerified) {
-    res.status(400);
-    throw new Error('Tài khoản này đã được xác thực trước đó!');
+    throw httpError(res, 400, 'Tài khoản này đã được xác thực trước đó!', ERROR_CODES.ACCOUNT_ALREADY_VERIFIED);
   }
 
   // Sai mã -> tăng số lần thử; sai quá 5 lần -> hủy mã
@@ -376,8 +361,7 @@ const resendOTP = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
-    res.status(404);
-    throw new Error('Không tìm thấy người dùng!');
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 
   assertOtpCooldown(user, res);
@@ -408,13 +392,11 @@ const forgotPassword = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
-    res.status(404);
-    throw new Error('Không tìm thấy tài khoản với email này!');
+    throw httpError(res, 404, 'Không tìm thấy tài khoản với email này!', ERROR_CODES.USER_NOT_FOUND);
   }
 
   if (!user.isVerified) {
-    res.status(400);
-    throw new Error('Tài khoản này chưa được xác thực email. Không thể sử dụng tính năng này!');
+    throw httpError(res, 400, 'Tài khoản này chưa được xác thực email. Không thể sử dụng tính năng này!', ERROR_CODES.ACCOUNT_UNVERIFIED);
   }
 
   assertOtpCooldown(user, res);
@@ -449,15 +431,13 @@ const resetPassword = asyncHandler(async (req, res) => {
 
   // Kiểm tra mật khẩu mới có mạnh không (trước khi kiểm tra OTP để không tốn lượt thử)
   if (!validator.isStrongPassword(newPassword, STRONG_PASSWORD_OPTIONS)) {
-    res.status(400);
-    throw new Error('Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
+    throw httpError(res, 400, 'Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!', ERROR_CODES.WEAK_PASSWORD);
   }
 
   const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
-    res.status(404);
-    throw new Error('Không tìm thấy người dùng!');
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 
   // Sai mã -> tăng số lần thử; sai quá 5 lần -> hủy mã
@@ -478,8 +458,7 @@ const googleLogin = asyncHandler(async (req, res) => {
   const idToken = req.body.idToken || req.body.credential || req.body.token;
 
   if (!idToken) {
-    res.status(400);
-    throw new Error('Vui lòng cung cấp Google ID Token (idToken hoặc credential)!');
+    throw httpError(res, 400, 'Vui lòng cung cấp Google ID Token (idToken hoặc credential)!', ERROR_CODES.MISSING_FIELDS);
   }
 
   let ticket;
@@ -490,20 +469,17 @@ const googleLogin = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     console.error('Lỗi xác thực Google Token:', error.message);
-    res.status(401);
-    throw new Error('Google ID Token không hợp lệ hoặc đã hết hạn!');
+    throw httpError(res, 401, 'Google ID Token không hợp lệ hoặc đã hết hạn!', ERROR_CODES.GOOGLE_TOKEN_INVALID);
   }
 
   const payload = ticket.getPayload();
   if (!payload || !payload.email) {
-    res.status(400);
-    throw new Error('Không thể lấy thông tin email từ Google Token!');
+    throw httpError(res, 400, 'Không thể lấy thông tin email từ Google Token!', ERROR_CODES.GOOGLE_TOKEN_INVALID);
   }
 
   // Chỉ tin email đã được Google xác minh, tránh gộp nhầm vào tài khoản local có cùng email
   if (payload.email_verified !== true) {
-    res.status(401);
-    throw new Error('Email Google của bạn chưa được xác minh!');
+    throw httpError(res, 401, 'Email Google của bạn chưa được xác minh!', ERROR_CODES.GOOGLE_EMAIL_UNVERIFIED);
   }
 
   const { sub: googleId, email, name, picture } = payload;

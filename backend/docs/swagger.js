@@ -44,10 +44,16 @@ const options = {
                             enum: [
                                 "VALIDATION_ERROR", "DUPLICATE_KEY", "INVALID_JSON", "RATE_LIMITED", "MISSING_FIELDS",
                                 "AUTH_REQUIRED", "TOKEN_INVALID", "USER_NOT_FOUND", "INVALID_CREDENTIALS",
-                                "ACCOUNT_UNVERIFIED", "ACCOUNT_BLOCKED", "NOT_ADMIN", "EMAIL_EXISTS",
+                                "ACCOUNT_UNVERIFIED", "ACCOUNT_ALREADY_VERIFIED", "ACCOUNT_BLOCKED", "NOT_ADMIN",
+                                "EMAIL_EXISTS", "INVALID_EMAIL", "WEAK_PASSWORD", "CURRENT_PASSWORD_INCORRECT",
+                                "SAME_PASSWORD", "GOOGLE_TOKEN_INVALID", "GOOGLE_EMAIL_UNVERIFIED",
                                 "OTP_INVALID", "OTP_EXPIRED", "OTP_ATTEMPTS_EXCEEDED", "OTP_COOLDOWN",
                                 "CITY_EXISTS", "CITY_NOT_FOUND", "CITY_HAS_PLACES", "CITY_HAS_TRIPS"
                             ]
+                        },
+                        retryAfter: {
+                            type: "integer",
+                            description: "Chỉ có với OTP_COOLDOWN và RATE_LIMITED (429): số giây phải đợi trước khi thử lại"
                         },
                         stack: { type: "string", nullable: true, description: "Chỉ có khi NODE_ENV=development" }
                     },

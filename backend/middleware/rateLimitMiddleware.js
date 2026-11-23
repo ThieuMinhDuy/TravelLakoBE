@@ -5,7 +5,8 @@ const FIFTEEN_MINUTES = 15 * 60 * 1000;
 
 /**
  * Tạo limiter theo IP, trả lỗi 429 cùng format { message, code } với errorHandler
- * để FE hiển thị được thông báo.
+ * để FE hiển thị được thông báo. Body có thêm retryAfter (số giây đến khi được thử lại),
+ * vì header Retry-After không đọc được từ trình duyệt (CORS không expose header này).
  */
 const createLimiter = ({ limit, windowMs = FIFTEEN_MINUTES, message, skipSuccessfulRequests = false }) =>
   rateLimit({
@@ -15,7 +16,11 @@ const createLimiter = ({ limit, windowMs = FIFTEEN_MINUTES, message, skipSuccess
     legacyHeaders: false,
     skipSuccessfulRequests,
     handler: (req, res, next, options) => {
-      res.status(options.statusCode).json({ message, code: ERROR_CODES.RATE_LIMITED });
+      const resetTime = req.rateLimit?.resetTime;
+      const retryAfter = resetTime
+        ? Math.max(1, Math.ceil((new Date(resetTime).getTime() - Date.now()) / 1000))
+        : Math.ceil(options.windowMs / 1000);
+      res.status(options.statusCode).json({ message, code: ERROR_CODES.RATE_LIMITED, retryAfter });
     },
   });
 
