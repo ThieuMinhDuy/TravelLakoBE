@@ -4,12 +4,12 @@ const hotelSchema = mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, 'Vui lòng nhập tên địa điểm'],
     },
     city: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'City',
-      required: true,
+      required: [true, 'Vui lòng chọn thành phố'],
     },
     description: {
       type: String,
@@ -22,12 +22,13 @@ const hotelSchema = mongoose.Schema(
     stars: {
       type: Number,
       default: 3,
-      min: 1,
-      max: 5,
+      min: [1, 'Số sao phải từ 1 đến 5'],
+      max: [5, 'Số sao phải từ 1 đến 5'],
     },
     pricePerNight: {
       type: Number,
-      required: true,
+      required: [true, 'Vui lòng nhập giá mỗi đêm'],
+      min: [0, 'Giá mỗi đêm không được âm'],
     },
     address: {
       type: String,
@@ -36,11 +37,15 @@ const hotelSchema = mongoose.Schema(
     coordinates: {
       lat: {
         type: Number,
-        required: true,
+        required: [true, 'Vui lòng nhập vĩ độ (lat) của địa điểm'],
+        min: [-90, 'Vĩ độ (lat) phải từ -90 đến 90'],
+        max: [90, 'Vĩ độ (lat) phải từ -90 đến 90'],
       },
       lng: {
         type: Number,
-        required: true,
+        required: [true, 'Vui lòng nhập kinh độ (lng) của địa điểm'],
+        min: [-180, 'Kinh độ (lng) phải từ -180 đến 180'],
+        max: [180, 'Kinh độ (lng) phải từ -180 đến 180'],
       },
     },
     rating: {
