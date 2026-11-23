@@ -5,6 +5,10 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import findCityByName from '../../utils/findCityByName.js';
+import { enrichImportedPlaces } from '../../utils/importEnrichment.js';
+
+const DEFAULT_IMPORT_LIMIT = 30;
+const MAX_IMPORT_LIMIT = 50;
 
 // Kho ảnh Unsplash mẫu chất lượng cao cho từng danh mục
 const SAMPLE_IMAGES = {
@@ -114,11 +118,46 @@ const generateDescription = (name, cityName, type) => {
   return list[Math.floor(Math.random() * list.length)];
 };
 
+const pickRandom = (list) => list[Math.floor(Math.random() * list.length)];
+
+/**
+ * Dữ liệu để tạo 1 địa điểm import. `ai` là dữ liệu Gemini đã kiểm tra (có thể null hoặc thiếu field);
+ * field nào thiếu thì dùng dữ liệu mẫu ngẫu nhiên. Ảnh luôn là ảnh mẫu (Gemini không cung cấp ảnh).
+ */
+const buildPlaceData = (type, item, cityName, ai) => {
+  const base = {
+    ...item,
+    description: ai?.description || generateDescription(item.name, cityName, type),
+    images: getRandomImages(type, 5),
+  };
+
+  switch (type) {
+    case 'Hotel':
+      return {
+        ...base,
+        stars: ai?.stars ?? Math.floor(Math.random() * 3) + 3, // 3 - 5 sao
+        pricePerNight: ai?.price ?? (Math.floor(Math.random() * 6) + 2) * 400000, // 800k - 3.2tr
+      };
+    case 'Attraction':
+      return { ...base, admissionFee: ai?.price ?? pickRandom([0, 20000, 30000, 50000, 100000]) };
+    case 'Restaurant':
+      return {
+        ...base,
+        cuisineType: ai?.cuisineType || pickRandom(['Ẩm thực Việt Nam', 'Đặc sản địa phương', 'Hải sản tươi sống', 'Món ăn gia đình']),
+        price: ai?.price ?? pickRandom([50000, 80000, 100000, 150000, 200000, 300000, 500000]),
+      };
+    case 'Cafe':
+      return { ...base, price: ai?.price ?? pickRandom([20000, 30000, 45000, 60000, 80000, 100000]) };
+    default:
+      return base;
+  }
+};
+
 // @desc    Import POIs from OpenStreetMap (OSM)
 // @route   POST /api/admin/import/osm
 // @access  Private/Admin
 const importFromOSM = asyncHandler(async (req, res) => {
-  let { cityId, cityName, limit = 30 } = req.body;
+  let { cityId, cityName, limit } = req.body;
 
   if (!cityId && !cityName) {
     res.status(400);
@@ -287,92 +326,69 @@ const importFromOSM = asyncHandler(async (req, res) => {
     }
   });
 
-  // Giới hạn số lượng nhập theo tham số limit của Admin
-  const targetHotels = fetchedHotels.slice(0, limit);
-  const targetAttractions = fetchedAttractions.slice(0, limit);
-  const targetRestaurants = fetchedRestaurants.slice(0, limit);
-  const targetCafes = fetchedCafes.slice(0, limit);
+  // Giới hạn số lượng nhập cho MỖI loại theo tham số limit của Admin (1-50, mặc định 30).
+  // Chặn trên để prompt gửi Gemini và thời gian import không quá lớn.
+  const parsedLimit = Number.parseInt(limit, 10);
+  const perTypeLimit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), MAX_IMPORT_LIMIT) : DEFAULT_IMPORT_LIMIT;
 
-  // 5. Hàm lưu và chống trùng lặp dữ liệu vào DB
+  // 5. Lọc ra địa điểm CHƯA có trong DB (chống trùng theo tên + thành phố, kể cả trùng trong cùng lần import)
   //    Không ghi rating / numReviews: để mặc định 0, chỉ đánh giá thật của người dùng mới tính điểm
-  const importStats = {
-    hotels: 0,
-    attractions: 0,
-    restaurants: 0,
-    cafes: 0
-  };
+  const groups = [
+    { type: 'Hotel', Model: Hotel, items: fetchedHotels, statKey: 'hotelsImported' },
+    { type: 'Attraction', Model: Attraction, items: fetchedAttractions, statKey: 'attractionsImported' },
+    { type: 'Restaurant', Model: Restaurant, items: fetchedRestaurants, statKey: 'restaurantsImported' },
+    { type: 'Cafe', Model: Cafe, items: fetchedCafes, statKey: 'cafesImported' },
+  ];
 
-  // Import Khách sạn
-  for (const item of targetHotels) {
-    const exists = await Hotel.findOne({ name: item.name, city: cityId });
-    if (!exists) {
-      await Hotel.create({
-        ...item,
-        description: generateDescription(item.name, city.name, 'Hotel'),
-        images: getRandomImages('Hotel', 5),
-        stars: Math.floor(Math.random() * 3) + 3, // 3 - 5 sao
-        pricePerNight: (Math.floor(Math.random() * 6) + 2) * 400000, // 800k - 3.2tr
-      });
-      importStats.hotels++;
+  for (const group of groups) {
+    const seen = new Set();
+    group.newItems = [];
+    for (const item of group.items.slice(0, perTypeLimit)) {
+      if (seen.has(item.name)) continue;
+      seen.add(item.name);
+      const exists = await group.Model.exists({ name: item.name, city: cityId });
+      if (!exists) group.newItems.push(item);
     }
   }
 
-  // Import Điểm tham quan
-  for (const item of targetAttractions) {
-    const exists = await Attraction.findOne({ name: item.name, city: cityId });
-    if (!exists) {
-      const fees = [0, 20000, 30000, 50000, 100000];
-      await Attraction.create({
-        ...item,
-        description: generateDescription(item.name, city.name, 'Attraction'),
-        images: getRandomImages('Attraction', 5),
-        admissionFee: fees[Math.floor(Math.random() * fees.length)],
-      });
-      importStats.attractions++;
-    }
-  }
+  // 6. Gemini viết mô tả + giá tham khảo (mỗi loại 1 lần gọi, chạy song song).
+  //    Gemini lỗi / chưa cấu hình thì dùng mô tả mẫu + giá ngẫu nhiên như trước.
+  const enrichment = await enrichImportedPlaces({
+    cityName: city.name,
+    groups: Object.fromEntries(groups.map((g) => [g.type, g.newItems.map((item) => item.name)])),
+    timeoutMs: Number(process.env.GEMINI_IMPORT_TIMEOUT_MS) || undefined,
+  });
 
-  // Import Nhà hàng
-  for (const item of targetRestaurants) {
-    const exists = await Restaurant.findOne({ name: item.name, city: cityId });
-    if (!exists) {
-      const cuisines = ['Ẩm thực Việt Nam', 'Đặc sản địa phương', 'Hải sản tươi sống', 'Món ăn gia đình'];
-      const prices = [50000, 80000, 100000, 150000, 200000, 300000, 500000];
-      await Restaurant.create({
-        ...item,
-        description: generateDescription(item.name, city.name, 'Restaurant'),
-        images: getRandomImages('Restaurant', 5),
-        cuisineType: cuisines[Math.floor(Math.random() * cuisines.length)],
-        price: prices[Math.floor(Math.random() * prices.length)],
-      });
-      importStats.restaurants++;
-    }
-  }
+  // 7. Lưu vào DB
+  const stats = {};
+  let aiGenerated = 0;
+  let templateGenerated = 0;
 
-  // Import Quán cafe
-  for (const item of targetCafes) {
-    const exists = await Cafe.findOne({ name: item.name, city: cityId });
-    if (!exists) {
-      const prices = [20000, 30000, 45000, 60000, 80000, 100000];
-      await Cafe.create({
-        ...item,
-        description: generateDescription(item.name, city.name, 'Cafe'),
-        images: getRandomImages('Cafe', 5),
-        price: prices[Math.floor(Math.random() * prices.length)],
-      });
-      importStats.cafes++;
+  for (const group of groups) {
+    stats[group.statKey] = 0;
+    const aiDetails = enrichment.details[group.type] || [];
+    for (const [i, item] of group.newItems.entries()) {
+      const ai = aiDetails[i] || null;
+      await group.Model.create(buildPlaceData(group.type, item, city.name, ai));
+      stats[group.statKey]++;
+      if (ai) aiGenerated++;
+      else templateGenerated++;
     }
   }
+  stats.totalImported = aiGenerated + templateGenerated;
 
   res.json({
     message: `Successfully imported places for ${city.name} from OpenStreetMap`,
-    stats: {
-      hotelsImported: importStats.hotels,
-      attractionsImported: importStats.attractions,
-      restaurantsImported: importStats.restaurants,
-      cafesImported: importStats.cafes,
-      totalImported: importStats.hotels + importStats.attractions + importStats.restaurants + importStats.cafes
-    }
+    stats,
+    enrichment: {
+      // Số địa điểm có mô tả + giá do Gemini viết / do mẫu có sẵn sinh ngẫu nhiên
+      aiGenerated,
+      templateGenerated,
+      // false khi server chưa cấu hình GEMINI_API_KEY
+      geminiEnabled: enrichment.enabled,
+      // Các loại địa điểm Gemini lỗi (hết hạn mức, quá thời gian...) nên dùng dữ liệu mẫu
+      failedTypes: enrichment.failedTypes,
+    },
   });
 });
 
