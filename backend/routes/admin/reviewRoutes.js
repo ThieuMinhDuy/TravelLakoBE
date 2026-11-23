@@ -25,8 +25,8 @@ router.use(protect, admin);
 *         name: itemType
 *         schema:
 *           type: string
-*           enum: [Attraction, Hotel, Restaurant, Cafe]
-*         description: Lọc đánh giá theo loại địa điểm
+*           enum: [attraction, hotel, restaurant, cafe, Attraction, Hotel, Restaurant, Cafe]
+*         description: Lọc đánh giá theo loại địa điểm (không phân biệt hoa/thường). Giá trị khác trả 400
 *
 *       - in: query
 *         name: itemId
@@ -35,7 +35,7 @@ router.use(protect, admin);
 *         description: Lọc đánh giá theo ID địa điểm cụ thể
  *     responses:
  *       200:
- *         description: Danh sách đánh giá kèm thông tin người dùng và địa điểm tương ứng
+ *         description: Danh sách đánh giá (mới nhất trước) kèm thông tin người dùng và địa điểm tương ứng
  *         content:
  *           application/json:
  *             schema:
@@ -64,6 +64,8 @@ router.use(protect, admin);
  *                   itemType:
  *                     type: string
  *                     enum: [Attraction, Hotel, Restaurant, Cafe]
+ *       400:
+ *         description: itemType không hợp lệ
  *       401:
  *         description: Chưa xác thực
  *       403:
