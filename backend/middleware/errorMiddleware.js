@@ -17,7 +17,9 @@ const errorHandler = (err, req, res, next) => {
 
   res.status(statusCode).json({
     message: message,
-    stack: process.env.NODE_ENV === 'production' ? null : err.stack,
+    // Chỉ lộ stack trace khi chạy local (NODE_ENV=development).
+    // Môi trường khác (production, hoặc quên đặt NODE_ENV) không trả stack để tránh lộ đường dẫn/code server.
+    stack: process.env.NODE_ENV === 'development' ? err.stack : null,
   });
 };
 
