@@ -323,6 +323,7 @@ router.use(protect, admin);
  * 
  *   delete:
  *     summary: Xóa địa điểm (Admin)
+ *     description: Xóa luôn đánh giá, mục yêu thích của địa điểm và gỡ nó khỏi lịch trình các chuyến đi.
  *     tags: [Admin - Places]
  *     security:
  *       - cookieAuth: []
@@ -348,7 +349,11 @@ router.use(protect, admin);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Place removed successfully"
+ *                   example: "Place removed successfully along with associated reviews"
+ *                 affectedTrips:
+ *                   type: number
+ *                   description: Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình
+ *                   example: 1
  *       401:
  *         description: Chưa xác thực
  *       403:

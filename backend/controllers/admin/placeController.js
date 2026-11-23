@@ -6,6 +6,9 @@ import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import Review from '../../models/reviewModel.js';
+import Favorite from '../../models/favoriteModel.js';
+import Trip from '../../models/tripModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 
 // Helper to map route parameter type to the corresponding Mongoose Model
 const getModelByType = (type) => {
@@ -40,8 +43,7 @@ const EDITABLE_FIELDS = {
 const assertCityExists = async (cityId, res) => {
   const cityExists = mongoose.isValidObjectId(cityId) ? await City.exists({ _id: cityId }) : null;
   if (!cityExists) {
-    res.status(400);
-    throw new Error('City not found');
+    throw httpError(res, 400, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
   }
 };
 
@@ -109,8 +111,7 @@ const createPlace = asyncHandler(async (req, res) => {
 
   // Validate if city exists
   if (!req.body.city) {
-    res.status(400);
-    throw new Error('City is required');
+    throw httpError(res, 400, 'City is required', ERROR_CODES.MISSING_FIELDS);
   }
   await assertCityExists(req.body.city, res);
 
@@ -177,11 +178,23 @@ const deletePlace = asyncHandler(async (req, res) => {
   const place = await Model.findById(req.params.id);
 
   if (place) {
-    // Xóa tất cả reviews liên quan đến địa điểm này
-    await Review.deleteMany({ itemId: req.params.id });
+    // Xóa đánh giá, mục yêu thích của địa điểm này và gỡ nó khỏi lịch trình các chuyến đi
+    // (trước đây lịch trình còn giữ placeId, populate ra null)
+    const [, , tripUpdate] = await Promise.all([
+      Review.deleteMany({ itemId: place._id }),
+      Favorite.deleteMany({ itemId: place._id }),
+      Trip.updateMany(
+        { 'schedule.places.placeId': place._id },
+        { $pull: { 'schedule.$[].places': { placeId: place._id } } }
+      ),
+    ]);
 
-    await Model.deleteOne({ _id: req.params.id });
-    res.json({ message: 'Place removed successfully along with associated reviews' });
+    await Model.deleteOne({ _id: place._id });
+    res.json({
+      message: 'Place removed successfully along with associated reviews',
+      // Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình
+      affectedTrips: tripUpdate.modifiedCount,
+    });
   } else {
     res.status(404);
     throw new Error('Place not found');
