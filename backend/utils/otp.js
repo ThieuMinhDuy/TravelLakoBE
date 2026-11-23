@@ -4,6 +4,9 @@ export const OTP_TTL_MS = 5 * 60 * 1000; // Mã có hiệu lực 5 phút
 export const OTP_RESEND_COOLDOWN_MS = 60 * 1000; // Tối thiểu 60 giây giữa 2 lần gửi mã
 export const OTP_MAX_ATTEMPTS = 5; // Nhập sai quá 5 lần thì mã bị hủy
 
+// Các field OTP bị ẩn mặc định (select: false trong userModel); thêm vào truy vấn khi cần đọc OTP
+export const OTP_SELECT = '+otp.code +otp.expiresAt +otp.attempts +otp.lastSentAt';
+
 /** Tạo lỗi kèm HTTP status để errorHandler trả đúng mã */
 const httpError = (res, status, message) => {
   res.status(status);

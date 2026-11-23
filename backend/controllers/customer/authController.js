@@ -7,7 +7,7 @@ import Favorite from '../../models/favoriteModel.js';
 import Review from '../../models/reviewModel.js';
 import generateToken, { clearTokenCookie } from '../../utils/generateToken.js';
 import sendEmail from '../../utils/sendEmail.js';
-import { assertOtpCooldown, issueOtp, verifyOtpOrThrow, clearOtp } from '../../utils/otp.js';
+import { assertOtpCooldown, issueOtp, verifyOtpOrThrow, clearOtp, OTP_SELECT } from '../../utils/otp.js';
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -91,7 +91,7 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   // 4. Kiểm tra email đã tồn tại chưa
-  const userExists = await User.findOne({ email });
+  const userExists = await User.findOne({ email }).select(OTP_SELECT);
 
   if (userExists) {
     if (userExists.isVerified) {
@@ -331,7 +331,7 @@ const verifyOTP = asyncHandler(async (req, res) => {
     throw new Error('Vui lòng cung cấp Email và mã OTP!');
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
     res.status(404);
@@ -380,7 +380,7 @@ const resendOTP = asyncHandler(async (req, res) => {
     throw new Error('Vui lòng cung cấp Email!');
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
     res.status(404);
@@ -413,7 +413,7 @@ const forgotPassword = asyncHandler(async (req, res) => {
     throw new Error('Vui lòng nhập Email!');
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
     res.status(404);
@@ -462,7 +462,7 @@ const resetPassword = asyncHandler(async (req, res) => {
     throw new Error('Mật khẩu mới phải tối thiểu 6 ký tự, bao gồm ít nhất 1 chữ hoa, 1 chữ thường và 1 chữ số!');
   }
 
-  const user = await User.findOne({ email });
+  const user = await User.findOne({ email }).select(OTP_SELECT);
 
   if (!user) {
     res.status(404);
