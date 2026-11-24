@@ -43,8 +43,13 @@ router.get('/vietnam-cities', getVietnamCities);
  *       Địa điểm đã có (trùng tên trong cùng thành phố) bị bỏ qua, nên import lại sẽ lấy thêm nhóm địa điểm tiếp theo.
  *       Thành phố mới chỉ được tạo khi lấy dữ liệu OpenStreetMap thành công.
  *
- *       Thường mất 5-90 giây: máy chủ OpenStreetMap miễn phí hay quá tải, backend gọi lại tới tối đa 90 giây.
- *       Server đang ngủ trên Render thì cộng thêm khoảng 50 giây khởi động, nên FE đặt timeout cho request này khoảng 210 giây.
+ *       Nguồn dữ liệu (`source`):
+ *       - `overpass` (chính): gọi song song nhiều máy chủ Overpass, lỗi thì gọi lại, tối đa 50 giây;
+ *       - `nominatim` (dự phòng, khi Overpass không trả kết quả): tìm theo loại bằng Nominatim, tối đa 30 giây.
+ *         Không có địa điểm dạng khu vực, có thể ít địa điểm hơn; địa chỉ lấy từ Nominatim.
+ *
+ *       Thường mất 5-80 giây. Server đang ngủ trên Render thì cộng thêm khoảng 50 giây khởi động,
+ *       nên FE đặt timeout cho request này khoảng 210 giây.
  *     tags: [Admin - Import]
  *     security:
  *       - cookieAuth: []
@@ -79,6 +84,10 @@ router.get('/vietnam-cities', getVietnamCities);
  *               properties:
  *                 message:
  *                   type: string
+ *                 source:
+ *                   type: string
+ *                   enum: [overpass, nominatim]
+ *                   description: Nguồn dữ liệu; nominatim là nguồn dự phòng khi Overpass quá tải (ít địa điểm hơn)
  *                 stats:
  *                   type: object
  *                   properties:
@@ -112,6 +121,7 @@ router.get('/vietnam-cities', getVietnamCities);
  *                       description: Loại địa điểm mà Gemini lỗi (hết hạn mức, quá thời gian...)
  *             example:
  *               message: "Successfully imported places for Đà Lạt from OpenStreetMap"
+ *               source: overpass
  *               stats: { hotelsImported: 2, attractionsImported: 1, restaurantsImported: 1, cafesImported: 1, totalImported: 5 }
  *               enrichment: { aiGenerated: 4, templateGenerated: 1, geminiEnabled: true, failedTypes: ["Attraction"] }
  *       400:
@@ -125,7 +135,7 @@ router.get('/vietnam-cities', getVietnamCities);
  *         description: Không tìm thấy thành phố theo cityId (`CITY_NOT_FOUND`)
  *       503:
  *         description: |
- *           Máy chủ OpenStreetMap (Overpass / Nominatim) quá tải, lỗi hoặc quá thời gian (`OSM_UNAVAILABLE`).
+ *           Cả Overpass lẫn nguồn dự phòng Nominatim đều quá tải / lỗi, hoặc Nominatim lỗi khi tìm tọa độ thành phố (`OSM_UNAVAILABLE`).
  *           Có `retryAfter` (số giây nên đợi trước khi thử lại). Không có thành phố mới nào bị tạo.
  *         content:
  *           application/json:

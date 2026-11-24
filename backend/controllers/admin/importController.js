@@ -7,7 +7,7 @@ import Cafe from '../../models/cafeModel.js';
 import findCityByName from '../../utils/findCityByName.js';
 import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 import { enrichImportedPlaces } from '../../utils/importEnrichment.js';
-import { buildOverpassQuery, geocodeCity, queryOverpass } from '../../utils/osm.js';
+import { buildOverpassQuery, geocodeCity, queryNominatimPlaces, queryOverpass } from '../../utils/osm.js';
 
 const DEFAULT_IMPORT_LIMIT = 30;
 const MAX_IMPORT_LIMIT = 50;
@@ -237,11 +237,21 @@ const importFromOSM = asyncHandler(async (req, res) => {
     coordinates = { lat, lng };
   }
 
-  // 2. Lấy địa điểm quanh thành phố (bán kính khoảng 5-10km) từ Overpass
+  // 2. Lấy địa điểm quanh thành phố (bán kính khoảng 5-10km) từ Overpass.
+  //    Overpass quá tải / quá hạn chót thì chuyển sang nguồn dự phòng Nominatim (ít địa điểm hơn, không có khu vực).
   const perTypeFetch = Math.min(perTypeLimit * FETCH_MULTIPLIER, MAX_FETCH_PER_TYPE);
-  const { elements } = await queryOverpass(buildOverpassQuery(coordinates, perTypeFetch));
+  let elements;
+  let source = 'overpass';
+  try {
+    ({ elements } = await queryOverpass(buildOverpassQuery(coordinates, perTypeFetch)));
+  } catch (err) {
+    if (err?.code !== ERROR_CODES.OSM_UNAVAILABLE) throw err;
+    console.warn('[Import Tool] Overpass không trả kết quả, chuyển sang nguồn dự phòng Nominatim');
+    elements = await queryNominatimPlaces(coordinates, perTypeFetch);
+    source = 'nominatim';
+  }
 
-  // 3. Overpass thành công mới tạo thành phố mới
+  // 3. Lấy được địa điểm rồi mới tạo thành phố mới
   if (!city) {
     // Một request import khác có thể đã tạo thành phố này trong lúc chờ Overpass
     city = await findCityByName(newCityName);
@@ -321,6 +331,8 @@ const importFromOSM = asyncHandler(async (req, res) => {
 
   res.json({
     message: `Successfully imported places for ${city.name} from OpenStreetMap`,
+    // Nguồn dữ liệu: 'overpass' (chính) | 'nominatim' (dự phòng khi Overpass quá tải; ít địa điểm hơn)
+    source,
     stats: orderedStats,
     enrichment: {
       // Số địa điểm có mô tả + giá do Gemini viết / do mẫu có sẵn sinh ngẫu nhiên
