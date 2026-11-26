@@ -37,6 +37,9 @@ export const ERROR_CODES = Object.freeze({
   INVALID_JSON: 'INVALID_JSON', // body JSON sai cú pháp
   RATE_LIMITED: 'RATE_LIMITED', // 429: gửi quá nhiều yêu cầu; body có retryAfter (số giây)
   MISSING_FIELDS: 'MISSING_FIELDS', // thiếu dữ liệu bắt buộc
+  NOT_FOUND: 'NOT_FOUND', // 404: đường dẫn API không tồn tại, hoặc ID trên URL sai định dạng
+  INTERNAL_ERROR: 'INTERNAL_ERROR', // 500: lỗi không lường trước (ngoài development chỉ trả câu chung, chi tiết ghi log)
+  NOT_OWNER: 'NOT_OWNER', // 403: thao tác trên chuyến đi / đánh giá / mục yêu thích của người khác
   // Xác thực / phân quyền
   AUTH_REQUIRED: 'AUTH_REQUIRED', // 401: chưa đăng nhập (không có token)
   TOKEN_INVALID: 'TOKEN_INVALID', // 401: token sai / hết hạn
@@ -66,4 +69,28 @@ export const ERROR_CODES = Object.freeze({
   // Import OpenStreetMap
   OSM_UNAVAILABLE: 'OSM_UNAVAILABLE', // 503: máy chủ OpenStreetMap (Overpass / Nominatim) quá tải, lỗi hoặc quá thời gian; body có retryAfter (số giây)
   GEOCODE_FAILED: 'GEOCODE_FAILED', // 400: không tìm thấy tọa độ của thành phố theo tên (sai chính tả, không phải địa danh Việt Nam...)
+  // Địa điểm
+  INVALID_PLACE_TYPE: 'INVALID_PLACE_TYPE', // 400: loại địa điểm không phải Attraction / Hotel / Restaurant / Cafe
+  PLACE_NOT_FOUND: 'PLACE_NOT_FOUND', // 404: không có địa điểm (xem chi tiết, thêm yêu thích, đánh giá, thêm vào lịch trình, admin)
+  // Chuyến đi
+  TRIP_NOT_FOUND: 'TRIP_NOT_FOUND', // 404: không có chuyến đi
+  TRIP_DAY_NOT_FOUND: 'TRIP_DAY_NOT_FOUND', // 400: ngày không có trong lịch trình của chuyến đi
+  SCHEDULE_ITEM_NOT_FOUND: 'SCHEDULE_ITEM_NOT_FOUND', // 404: địa điểm không có trong lịch trình
+  INVALID_DATE_RANGE: 'INVALID_DATE_RANGE', // 400: ngày bắt đầu sau ngày kết thúc
+  // Đánh giá / yêu thích
+  REVIEW_NOT_FOUND: 'REVIEW_NOT_FOUND', // 404: không có đánh giá
+  REVIEW_EXISTS: 'REVIEW_EXISTS', // 400: đã đánh giá địa điểm này rồi
+  FAVORITE_NOT_FOUND: 'FAVORITE_NOT_FOUND', // 404: không có mục yêu thích
+  FAVORITE_EXISTS: 'FAVORITE_EXISTS', // 400: địa điểm đã có trong danh sách yêu thích
+  // Quản lý người dùng (admin)
+  LAST_ADMIN: 'LAST_ADMIN', // 400: xóa / gỡ quyền / khóa quản trị viên cuối cùng
+  CANNOT_MODIFY_SELF: 'CANNOT_MODIFY_SELF', // 400: admin tự xóa, tự khóa hoặc tự gỡ quyền admin của mình
+  // Upload ảnh
+  INVALID_FILE_TYPE: 'INVALID_FILE_TYPE', // 400: không phải ảnh JPG / PNG / WEBP
+  FILE_TOO_LARGE: 'FILE_TOO_LARGE', // 400: ảnh quá 5MB
+  UPLOAD_FAILED: 'UPLOAD_FAILED', // 500: lưu ảnh thất bại hoặc máy chủ chưa cấu hình / cấu hình sai Cloudinary
+  // Trợ lý AI
+  AI_NOT_CONFIGURED: 'AI_NOT_CONFIGURED', // 500: máy chủ chưa cấu hình GEMINI_API_KEY
+  AI_BUSY: 'AI_BUSY', // 429: Gemini hết hạn mức tạm thời
+  AI_FAILED: 'AI_FAILED', // 502: Gemini lỗi hoặc trả kết quả không hợp lệ
 });

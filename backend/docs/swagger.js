@@ -1,5 +1,6 @@
 import swaggerJsdoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
+import { ERROR_CODES } from '../utils/httpError.js';
 
 const options = {
     definition: {
@@ -40,17 +41,8 @@ const options = {
                         message: { type: "string", description: "Thông báo hiển thị cho người dùng (có thể đổi câu chữ)" },
                         code: {
                             type: "string",
-                            description: "Mã lỗi cố định để FE nhận diện (không đổi theo câu chữ). Không có với lỗi chưa phân loại. Danh sách đầy đủ: utils/httpError.js",
-                            enum: [
-                                "VALIDATION_ERROR", "DUPLICATE_KEY", "INVALID_JSON", "RATE_LIMITED", "MISSING_FIELDS",
-                                "AUTH_REQUIRED", "TOKEN_INVALID", "USER_NOT_FOUND", "INVALID_CREDENTIALS",
-                                "ACCOUNT_UNVERIFIED", "ACCOUNT_ALREADY_VERIFIED", "ACCOUNT_BLOCKED", "NOT_ADMIN",
-                                "EMAIL_EXISTS", "INVALID_EMAIL", "WEAK_PASSWORD", "CURRENT_PASSWORD_INCORRECT",
-                                "SAME_PASSWORD", "GOOGLE_TOKEN_INVALID", "GOOGLE_EMAIL_UNVERIFIED",
-                                "OTP_INVALID", "OTP_EXPIRED", "OTP_ATTEMPTS_EXCEEDED", "OTP_COOLDOWN",
-                                "CITY_EXISTS", "CITY_NOT_FOUND", "CITY_HAS_PLACES", "CITY_HAS_TRIPS",
-                                "OSM_UNAVAILABLE", "GEOCODE_FAILED"
-                            ]
+                            description: "Mã lỗi cố định để FE nhận diện (không đổi theo câu chữ). Mọi lỗi đều có mã; lỗi không lường trước là INTERNAL_ERROR. Ý nghĩa từng mã: utils/httpError.js",
+                            enum: Object.values(ERROR_CODES)
                         },
                         retryAfter: {
                             type: "integer",

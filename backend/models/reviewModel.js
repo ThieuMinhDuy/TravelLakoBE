@@ -9,23 +9,23 @@ const reviewSchema = mongoose.Schema(
     },
     itemType: {
       type: String,
-      required: true,
-      enum: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'],
+      required: [true, 'Thiếu loại địa điểm'],
+      enum: { values: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'], message: 'Loại địa điểm không hợp lệ' },
     },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: [true, 'Thiếu địa điểm được đánh giá'],
       refPath: 'itemType',
     },
     rating: {
       type: Number,
-      required: true,
-      min: 1,
-      max: 5,
+      required: [true, 'Vui lòng chọn số sao'],
+      min: [1, 'Số sao phải từ 1 đến 5'],
+      max: [5, 'Số sao phải từ 1 đến 5'],
     },
     comment: {
       type: String,
-      required: true,
+      required: [true, 'Vui lòng nhập nội dung đánh giá'],
     },
   },
   {

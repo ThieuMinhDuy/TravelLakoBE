@@ -9,12 +9,12 @@ const favoriteSchema = mongoose.Schema(
     },
     itemType: {
       type: String,
-      required: true,
-      enum: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'],
+      required: [true, 'Thiếu loại địa điểm'],
+      enum: { values: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'], message: 'Loại địa điểm không hợp lệ' },
     },
     itemId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
+      required: [true, 'Thiếu địa điểm'],
       refPath: 'itemType',
     },
   },

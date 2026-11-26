@@ -1,26 +1,16 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
 import Restaurant from '../../models/restaurantModel.js';
 import Cafe from '../../models/cafeModel.js';
 import escapeRegex from '../../utils/escapeRegex.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
+import { getPlaceModel, INVALID_PLACE_TYPE_MESSAGE, PLACE_NOT_FOUND_MESSAGE } from '../../utils/placeTypes.js';
 
-// Helper to map route parameter type to the corresponding Mongoose Model
-const getModelByType = (type) => {
-  switch (type.toLowerCase()) {
-    case 'attraction':
-      return Attraction;
-    case 'hotel':
-      return Hotel;
-    case 'restaurant':
-      return Restaurant;
-    case 'cafe':
-      return Cafe;
-    default:
-      return null;
-  }
-};
+// Loại địa điểm trên URL (attraction, hotel...) -> Mongoose Model
+const getModelByType = getPlaceModel;
 
 // @desc    Get all places of a specific type with filters
 // @route   GET /api/places/:type
@@ -30,8 +20,7 @@ const getPlaces = asyncHandler(async (req, res) => {
   const Model = getModelByType(type);
 
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   const query = {};
@@ -101,17 +90,15 @@ const getPlaceById = asyncHandler(async (req, res) => {
   const Model = getModelByType(type);
 
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
-  const place = await Model.findById(id).populate('city');
+  const place = mongoose.isValidObjectId(id) ? await Model.findById(id).populate('city') : null;
 
   if (place) {
     res.json(place);
   } else {
-    res.status(404);
-    throw new Error('Place not found');
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 });
 

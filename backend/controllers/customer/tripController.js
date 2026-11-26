@@ -1,10 +1,28 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import Trip from '../../models/tripModel.js';
 import City from '../../models/cityModel.js';
-import Attraction from '../../models/attractionModel.js';
-import Hotel from '../../models/hotelModel.js';
-import Restaurant from '../../models/restaurantModel.js';
-import Cafe from '../../models/cafeModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
+import { findPlace, matchPlaceType, INVALID_PLACE_TYPE_MESSAGE, PLACE_NOT_FOUND_MESSAGE } from '../../utils/placeTypes.js';
+
+/** Chuyến đi không có -> 404 TRIP_NOT_FOUND; của người khác -> 403 NOT_OWNER */
+const assertOwnTrip = (trip, req, res) => {
+  if (!trip) {
+    throw httpError(res, 404, 'Không tìm thấy chuyến đi', ERROR_CODES.TRIP_NOT_FOUND);
+  }
+  if (trip.user.toString() !== req.user._id.toString()) {
+    throw httpError(res, 403, 'Bạn không có quyền thao tác trên chuyến đi này!', ERROR_CODES.NOT_OWNER);
+  }
+};
+
+/** Tìm chuyến đi theo :id; ID sai định dạng coi như không tìm thấy (thay vì lỗi CastError) */
+const findTrip = (id) => (mongoose.isValidObjectId(id) ? Trip.findById(id) : Promise.resolve(null));
+
+const dayNotFound = (res, day) =>
+  httpError(res, 400, `Ngày ${day} không có trong lịch trình của chuyến đi`, ERROR_CODES.TRIP_DAY_NOT_FOUND);
+
+const scheduleItemNotFound = (res) =>
+  httpError(res, 404, 'Không tìm thấy địa điểm trong lịch trình', ERROR_CODES.SCHEDULE_ITEM_NOT_FOUND);
 
 // @desc    Create a new trip
 // @route   POST /api/trips
@@ -13,30 +31,24 @@ const createTrip = asyncHandler(async (req, res) => {
   const { title, city, startDate, endDate, budget } = req.body;
 
   if (!title || !city || !startDate || !endDate) {
-    res.status(400);
-    throw new Error('Please provide all required fields: title, city, startDate, endDate');
+    throw httpError(res, 400, 'Vui lòng nhập đủ tên chuyến đi, thành phố, ngày bắt đầu và ngày kết thúc', ERROR_CODES.MISSING_FIELDS);
   }
 
   // Check if city exists
-  const cityExists = await City.findById(city);
+  const cityExists = mongoose.isValidObjectId(city) ? await City.findById(city) : null;
   if (!cityExists) {
-    res.status(404);
-    throw new Error('City not found');
+    throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 
   const start = new Date(startDate);
   const end = new Date(endDate);
 
   if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-    const error = new Error('Invalid start or end date');
-    res.status(400);
-    throw error;
+    throw httpError(res, 400, 'Ngày bắt đầu hoặc ngày kết thúc không hợp lệ', ERROR_CODES.VALIDATION_ERROR);
   }
 
   if (start > end) {
-    const error = new Error('Start date must be before or equal to end date');
-    res.status(400);
-    throw error;
+    throw httpError(res, 400, 'Ngày bắt đầu phải trước hoặc trùng ngày kết thúc', ERROR_CODES.INVALID_DATE_RANGE);
   }
 
   // Parse to UTC midnight to avoid timezone shifting
@@ -134,22 +146,15 @@ const getMyTrips = asyncHandler(async (req, res) => {
 // @route   GET /api/trips/:id
 // @access  Private
 const getTripById = asyncHandler(async (req, res) => {
-  const trip = await Trip.findById(req.params.id)
-    .populate('city')
-    .populate({
-      path: 'schedule.places.placeId'
-    });
+  const trip = mongoose.isValidObjectId(req.params.id)
+    ? await Trip.findById(req.params.id)
+      .populate('city')
+      .populate({
+        path: 'schedule.places.placeId'
+      })
+    : null;
 
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  assertOwnTrip(trip, req, res);
 
   res.json(trip);
 });
@@ -158,21 +163,12 @@ const getTripById = asyncHandler(async (req, res) => {
 // @route   DELETE /api/trips/:id
 // @access  Private
 const deleteTrip = asyncHandler(async (req, res) => {
-  const trip = await Trip.findById(req.params.id);
+  const trip = await findTrip(req.params.id);
 
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  assertOwnTrip(trip, req, res);
 
   await Trip.deleteOne({ _id: req.params.id });
-  res.json({ message: 'Trip removed successfully' });
+  res.json({ message: 'Đã xóa chuyến đi' });
 });
 
 // @desc    Add a place to a specific day in trip schedule
@@ -182,47 +178,27 @@ const addPlaceToSchedule = asyncHandler(async (req, res) => {
   const { day, placeType, placeId, note } = req.body;
 
   if (!day || !placeType || !placeId) {
-    res.status(400);
-    throw new Error('Please provide day, placeType, and placeId');
+    throw httpError(res, 400, 'Vui lòng chọn ngày và địa điểm cần thêm (day, placeType, placeId)', ERROR_CODES.MISSING_FIELDS);
   }
 
-  const validTypes = ['Attraction', 'Hotel', 'Restaurant', 'Cafe'];
-  const typeMatch = validTypes.find(t => t.toLowerCase() === placeType.toLowerCase());
+  const typeMatch = matchPlaceType(placeType);
   if (!typeMatch) {
-    res.status(400);
-    throw new Error('Invalid placeType. Must be: Attraction, Hotel, Restaurant, Cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   // Check if place exists
-  let Model;
-  if (typeMatch === 'Attraction') Model = Attraction;
-  else if (typeMatch === 'Hotel') Model = Hotel;
-  else if (typeMatch === 'Restaurant') Model = Restaurant;
-  else if (typeMatch === 'Cafe') Model = Cafe;
-
-  const place = await Model.findById(placeId);
+  const place = await findPlace(typeMatch, placeId);
   if (!place) {
-    res.status(404);
-    throw new Error(`${typeMatch} not found`);
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 
   // Find target day in schedule
   const daySchedule = trip.schedule.find(s => s.day === Number(day));
   if (!daySchedule) {
-    res.status(400);
-    throw new Error(`Day ${day} does not exist in this trip's schedule`);
+    throw dayNotFound(res, day);
   }
 
   // Calculate order
@@ -243,17 +219,8 @@ const addPlaceToSchedule = asyncHandler(async (req, res) => {
 // @route   DELETE /api/trips/:id/schedule/places/:subId
 // @access  Private
 const removePlaceFromSchedule = asyncHandler(async (req, res) => {
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   const { subId } = req.params;
 
@@ -270,8 +237,7 @@ const removePlaceFromSchedule = asyncHandler(async (req, res) => {
   }
 
   if (!foundDay) {
-    res.status(404);
-    throw new Error('Place not found in trip schedule');
+    throw scheduleItemNotFound(res);
   }
 
   // Reorder remaining places in that day
@@ -291,26 +257,15 @@ const reorderSchedulePlaces = asyncHandler(async (req, res) => {
   const { day, placesOrder } = req.body; // placesOrder is array of subdocument _id strings
 
   if (!day || !Array.isArray(placesOrder)) {
-    res.status(400);
-    throw new Error('Please provide day and placesOrder array of IDs');
+    throw httpError(res, 400, 'Vui lòng gửi ngày và thứ tự các địa điểm (day, placesOrder)', ERROR_CODES.MISSING_FIELDS);
   }
 
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   const daySchedule = trip.schedule.find(s => s.day === Number(day));
   if (!daySchedule) {
-    res.status(400);
-    throw new Error(`Day ${day} does not exist in this trip's schedule`);
+    throw dayNotFound(res, day);
   }
 
   // Map to hold items by their subId
@@ -350,22 +305,11 @@ const checkInPlace = asyncHandler(async (req, res) => {
   const { visited } = req.body;
 
   if (visited === undefined) {
-    const error = new Error('Please provide visited status (true or false)');
-    res.status(400);
-    throw error;
+    throw httpError(res, 400, 'Vui lòng gửi trạng thái đã ghé (visited: true hoặc false)', ERROR_CODES.MISSING_FIELDS);
   }
 
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   const { subId } = req.params;
 
@@ -379,8 +323,7 @@ const checkInPlace = asyncHandler(async (req, res) => {
   }
 
   if (!foundPlace) {
-    res.status(404);
-    throw new Error('Place not found in trip schedule');
+    throw scheduleItemNotFound(res);
   }
 
   foundPlace.visited = !!visited;
@@ -400,26 +343,15 @@ const checkInPlace = asyncHandler(async (req, res) => {
 const updateTripDiary = asyncHandler(async (req, res) => {
   const { notes, photos } = req.body;
 
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   if (notes !== undefined) {
     trip.diary.notes = notes;
   }
   if (photos !== undefined) {
     if (!Array.isArray(photos)) {
-      const error = new Error('Photos must be an array of strings');
-      res.status(400);
-      throw error;
+      throw httpError(res, 400, 'Ảnh nhật ký phải là danh sách đường dẫn ảnh', ERROR_CODES.VALIDATION_ERROR);
     }
     trip.diary.photos = photos;
   }
@@ -434,17 +366,8 @@ const updateTripDiary = asyncHandler(async (req, res) => {
 const updateTripMetadata = asyncHandler(async (req, res) => {
   const { title, budget } = req.body;
 
-  const trip = await Trip.findById(req.params.id);
-  if (!trip) {
-    res.status(404);
-    throw new Error('Trip not found');
-  }
-
-  // Check ownership
-  if (trip.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền thao tác trên chuyến đi này!');
-  }
+  const trip = await findTrip(req.params.id);
+  assertOwnTrip(trip, req, res);
 
   if (title !== undefined) {
     trip.title = title;
