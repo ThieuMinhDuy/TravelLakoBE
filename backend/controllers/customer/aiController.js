@@ -31,6 +31,65 @@ const toAiError = (res, error) => {
 // Bỏ dấu tiếng Việt + chữ thường để so khớp tên (dùng chung với import / quản lý thành phố)
 const normalizeText = toSearchKey;
 
+const findCityInText = (citiesList, text) => {
+  if (!text) return null;
+  const normalizedText = normalizeText(text);
+  const sorted = [...citiesList].sort((a, b) => b.name.length - a.name.length);
+  return sorted.find((city) => normalizedText.includes(normalizeText(city.name))) || null;
+};
+
+const findCityFromMessages = (citiesList, messages = []) => {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const text = messages[i]?.parts?.map((p) => p.text || '').join(' ') || '';
+    const matched = findCityInText(citiesList, text);
+    if (matched) return matched;
+  }
+  return null;
+};
+
+const formatPlacesForPrompt = (list, type, includeId = false) =>
+  list.map((p) => {
+    let priceText = '';
+    if (p.pricePerNight !== undefined) priceText = `, Giá phòng: ${p.pricePerNight}đ/đêm`;
+    else if (p.admissionFee !== undefined) priceText = `, Vé vào: ${p.admissionFee}đ`;
+    else if (p.price !== undefined) priceText = `, Giá trung bình: ${p.price}đ`;
+    const idPart = includeId ? `, ID: "${p._id}"` : '';
+    return `- [${type}] Tên: "${p.name}"${idPart}, Điểm đánh giá: ${p.rating || 5}/5, Chi tiết: "${p.description || ''}"${priceText}`;
+  }).join('\n');
+
+/**
+ * Loại bỏ các ký tự Markdown đặc biệt (###, **, *, _, `) trong câu trả lời chat
+ * để FE/API hiển thị văn bản tự nhiên, sạch sẽ.
+ */
+const sanitizeChatReply = (rawText) => {
+  if (!rawText || typeof rawText !== 'string') return '';
+
+  return rawText
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || /^[-*_]{3,}$/.test(trimmed)) return '';
+
+      let clean = line
+        .replace(/\\([*_`#])/g, '$1')
+        .replace(/^\s*#{1,6}\s+/, '')
+        .replace(/^\s*[-*+]\s+/, '• ')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\*\*([^*]+?)\*\*/g, '$1')
+        .replace(/__([^_]+?)__/g, '$1')
+        .replace(/(^|\s)\*([^\s*][^*]*?)\*(?=$|\s|[.,!?:;)])/g, '$1$2')
+        .replace(/\*\*/g, '')
+        .replace(/__/g, '');
+
+      clean = clean.replace(/^\s*•\s+/, '• ').trimEnd();
+      return clean;
+    })
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
 // @desc    Generate trip schedule suggestion using Gemini AI
 // @route   POST /api/ai/suggest
 // @access  Private
@@ -46,21 +105,16 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
   if (cityId) {
     targetCity = mongoose.isValidObjectId(cityId) ? await City.findById(cityId) : null;
   } else {
-    // Attempt to extract city name from notes or prompt
     const textToSearch = notes || '';
-    if (!textToSearch) {
+    // Không có lời nhắn thì vẫn có thể tìm thành phố trong lịch sử chat (khi lưu lịch trình từ chat)
+    if (!textToSearch && !chatRecord?.messages?.length) {
       throw httpError(res, 400, 'Vui lòng chọn thành phố hoặc nhập lời nhắn có tên thành phố để trợ lý tìm kiếm.', ERROR_CODES.MISSING_FIELDS);
     }
     const citiesList = await City.find({});
-    const normalizedText = normalizeText(textToSearch);
-    
-    // Find a city whose name exists in the normalizedText
-    for (const city of citiesList) {
-      const normalizedCityName = normalizeText(city.name);
-      if (normalizedText.includes(normalizedCityName)) {
-        targetCity = city;
-        break;
-      }
+    targetCity = findCityInText(citiesList, textToSearch);
+    // Khi parse từ chat, fallback tìm tên thành phố trong lịch sử trò chuyện gần nhất
+    if (!targetCity && isParse && chatRecord?.messages?.length) {
+      targetCity = findCityFromMessages(citiesList, chatRecord.messages);
     }
   }
 
@@ -78,28 +132,18 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
     restaurants = await Restaurant.find({ city: targetCity._id }).lean();
     cafes = await Cafe.find({ city: targetCity._id }).lean();
   } else {
-    hotels = await Hotel.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-    attractions = await Attraction.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-    restaurants = await Restaurant.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
-    cafes = await Cafe.find({ city: targetCity._id }).sort({ rating: -1 }).limit(10).lean();
+    hotels = await Hotel.find({ city: targetCity._id }).sort({ rating: -1 }).limit(20).lean();
+    attractions = await Attraction.find({ city: targetCity._id }).sort({ rating: -1 }).limit(20).lean();
+    restaurants = await Restaurant.find({ city: targetCity._id }).sort({ rating: -1 }).limit(20).lean();
+    cafes = await Cafe.find({ city: targetCity._id }).sort({ rating: -1 }).limit(20).lean();
   }
 
   // 2. Format places list for the AI prompt
-  const formatPlaces = (list, type) => {
-    return list.map(p => {
-      let priceText = '';
-      if (p.pricePerNight !== undefined) priceText = `, Giá phòng: ${p.pricePerNight}đ/đêm`;
-      else if (p.admissionFee !== undefined) priceText = `, Vé vào: ${p.admissionFee}đ`;
-      else if (p.price !== undefined) priceText = `, Giá trung bình: ${p.price}đ`;
-      return `- [${type}] Tên: "${p.name}", ID: "${p._id}", Điểm đánh giá: ${p.rating || 5}/5, Chi tiết: "${p.description || ''}"${priceText}`;
-    }).join('\n');
-  };
-
   const placesListText = [
-    formatPlaces(hotels, 'Hotel'),
-    formatPlaces(attractions, 'Attraction'),
-    formatPlaces(restaurants, 'Restaurant'),
-    formatPlaces(cafes, 'Cafe')
+    formatPlacesForPrompt(hotels, 'Hotel', true),
+    formatPlacesForPrompt(attractions, 'Attraction', true),
+    formatPlacesForPrompt(restaurants, 'Restaurant', true),
+    formatPlacesForPrompt(cafes, 'Cafe', true),
   ].filter(Boolean).join('\n\n');
 
   // Calculate duration
@@ -118,7 +162,7 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
     }
 
     systemPrompt = `Bạn là một trợ lý ảo phân tích lịch trình du lịch thông minh cho ứng dụng TravelLako.
-Nhiệm vụ của bạn là đọc và phân tích lịch trình du lịch dạng chữ (Markdown) được cung cấp bởi người dùng và trích xuất cấu trúc dữ liệu JSON chính xác khớp với hệ thống.
+Nhiệm vụ của bạn là đọc và phân tích lịch trình du lịch dạng văn bản được cung cấp bởi người dùng và trích xuất cấu trúc dữ liệu JSON chính xác khớp với hệ thống.
 
 DANH SÁCH ĐỊA ĐIỂM THỰC TẾ TRONG HỆ THỐNG:
 ${placesListText}
@@ -127,7 +171,7 @@ CÁC YÊU CẦU QUAN TRỌNG:
 1. Bạn phải đọc lịch trình chữ và đối chiếu tên các địa điểm xuất hiện trong lịch trình chữ với danh sách địa điểm thực tế của hệ thống ở trên để tìm ra đúng "placeId" và "placeType".
    - Ví dụ: Nếu trong lịch trình chữ ghi "Khách sạn Golden Holiday", hãy tìm khách sạn có tên tương tự trong danh sách thực tế ở trên để lấy ra đúng ID của nó.
    - Phân biệt rõ các loại placeType: 'Hotel', 'Attraction', 'Restaurant', 'Cafe'.
-2. Sắp xếp lại lịch trình theo đúng thứ tự các ngày (day 1, 2...) và thứ tự các địa điểm (order 0, 1, 2...) tương tự như trong văn bản lịch trình.
+2. Giữ đầy đủ tất cả địa điểm xuất hiện trong từng ngày (kể cả khi một ngày có 6-7 địa điểm), sắp xếp lại theo đúng thứ tự các ngày (day 1, 2...) và thứ tự các địa điểm (order 0, 1, 2...) tương tự như trong văn bản lịch trình.
 3. Không tự ý thêm bớt hay chọn các địa điểm khác ngoài những gì có trong văn bản lịch trình chữ của người dùng.
 4. Trích xuất chính xác số tiền ngân sách mà người dùng mong muốn từ lịch sử cuộc trò chuyện dưới đây. 
    - Tìm các cụm từ chỉ ngân sách (ví dụ: "ngân sách 4 triệu", "4tr", "4.000.000", "ngân sách 3 triệu"...) trong lịch sử chat để lấy giá trị số tương ứng (ví dụ: 4000000 hoặc 3000000) gán vào trường "estimatedTotalCost".
@@ -148,7 +192,7 @@ ${placesListText}
 
 Quy tắc sắp xếp:
 - Ngày đầu tiên nên bắt đầu bằng việc nhận phòng khách sạn (Hotel) nếu có khách sạn được gợi ý.
-- Mỗi ngày chỉ nên có tối đa 3-4 địa điểm hoạt động (bao gồm tham quan Attraction, ăn uống Restaurant/Cafe) xếp theo thứ tự thời gian hợp lý (order từ 0 tăng dần).
+- Mỗi ngày cần gợi ý từ 6 đến 7 địa điểm hoạt động (trải đều Sáng, Trưa, Chiều, Tối gồm tham quan Attraction, ăn uống Restaurant/Cafe và Khách sạn Hotel khi phù hợp) xếp theo thứ tự thời gian hợp lý (order từ 0 tăng dần). Nếu thành phố có ít hơn 6-7 địa điểm trong danh sách thực tế thì dùng tối đa số địa điểm hiện có.
 - Đảm bảo lịch trình đáp ứng tốt nhất sở thích "${preferences || 'Tổng hợp'}" và phân khúc ngân sách "${budget || 'Trung bình'}".
 - Ước tính tổng chi phí toàn bộ chuyến đi "estimatedTotalCost" (bao gồm giá phòng khách sạn tham khảo, vé vào cửa các điểm du lịch, và chi phí ăn uống ước lượng cho ${duration} ngày).`;
 
@@ -273,19 +317,11 @@ const chatWithAI = asyncHandler(async (req, res) => {
     chatRecord = new Chat({ user: req.user._id, messages: [] });
   }
 
-  // 2. Search for city in message or recent DB history to select database places
-  let targetCity = null;
+  // 2. Search for city in current message first, then fall back to newest-first history
   const citiesList = await City.find({});
-  const dbHistoryText = chatRecord.messages.map(m => m.parts?.[0]?.text || '').join(' ');
-  const allHistoryText = dbHistoryText + ' ' + message;
-  const normalizedText = normalizeText(allHistoryText);
-
-  for (const city of citiesList) {
-    const normalizedCityName = normalizeText(city.name);
-    if (normalizedText.includes(normalizedCityName)) {
-      targetCity = city;
-      break;
-    }
+  let targetCity = findCityInText(citiesList, message);
+  if (!targetCity) {
+    targetCity = findCityFromMessages(citiesList, chatRecord.messages);
   }
 
   let dbPlacesText = '';
@@ -297,21 +333,11 @@ const chatWithAI = asyncHandler(async (req, res) => {
     const restaurants = await Restaurant.find({ city: targetCity._id }).lean();
     const cafes = await Cafe.find({ city: targetCity._id }).lean();
 
-    const formatPlaces = (list, type) => {
-      return list.map(p => {
-        let priceText = '';
-        if (p.pricePerNight !== undefined) priceText = `, Giá phòng: ${p.pricePerNight}đ/đêm`;
-        else if (p.admissionFee !== undefined) priceText = `, Vé vào: ${p.admissionFee}đ`;
-        else if (p.price !== undefined) priceText = `, Giá trung bình: ${p.price}đ`;
-        return `- [${type}] Tên: "${p.name}", Chi tiết: "${p.description || ''}"${priceText}`;
-      }).join('\n');
-    };
-
     const placesListText = [
-      formatPlaces(hotels, 'Hotel'),
-      formatPlaces(attractions, 'Attraction'),
-      formatPlaces(restaurants, 'Restaurant'),
-      formatPlaces(cafes, 'Cafe')
+      formatPlacesForPrompt(hotels, 'Hotel', false),
+      formatPlacesForPrompt(attractions, 'Attraction', false),
+      formatPlacesForPrompt(restaurants, 'Restaurant', false),
+      formatPlacesForPrompt(cafes, 'Cafe', false),
     ].filter(Boolean).join('\n\n');
 
     dbPlacesText = `Danh sách địa điểm thực tế tại thành phố ${targetCity.name} của hệ thống TravelLako:
@@ -359,18 +385,24 @@ QUY TẮC PHÂN BIỆT NHU CẦU:
 QUY TẮC KHI LẬP LỊCH TRÌNH:
 - Khi người dùng yêu cầu lập lịch trình du lịch, bạn bắt buộc phải biết rõ 2 thông tin quan trọng: Ngân sách dự kiến và Số ngày đi (độ dài chuyến đi).
 - Nếu người dùng CHƯA cung cấp một trong hai thông tin này (Ngân sách hoặc Số ngày đi), bạn TUYỆT ĐỐI KHÔNG tự bịa ra thông tin mặc định hay lập lịch trình ngay. Thay vào đó, hãy lịch sự hỏi lại người dùng để xác nhận các thông tin còn thiếu này.
-- Chỉ khi người dùng đã cung cấp đủ cả thông tin về Ngân sách và Số ngày đi, bạn mới tiến hành gợi ý lịch trình chi tiết theo từng ngày (gồm Sáng, Chiều, Tối) dưới dạng Markdown.
+- Chỉ khi người dùng đã cung cấp đủ cả thông tin về Ngân sách và Số ngày đi, bạn mới tiến hành gợi ý lịch trình chi tiết theo từng ngày.
+- Số lượng địa điểm mỗi ngày (BẮT BUỘC): Trong mỗi ngày của lịch trình, bạn PHẢI gợi ý từ 6 đến 7 địa điểm cụ thể từ danh sách thực tế (phân bổ hợp lý qua Sáng, Trưa, Chiều, Tối gồm khách sạn, điểm tham quan, nhà hàng và quán cafe). Nếu thành phố trong danh sách thực tế có ít hơn 6-7 địa điểm thì sử dụng tối đa số địa điểm hiện có; tuyệt đối không tự bịa địa điểm ngoài danh sách.
 - Riêng Ngày bắt đầu chuyến đi không bắt buộc người dùng phải cung cấp, bạn không cần hỏi thông tin này.
 
+QUY TẮC ĐỊNH DẠNG CÂU TRẢ LỜI (BẮT BUỘC):
+- Trả lời bằng văn bản thuần tự nhiên, rõ ràng, dễ đọc.
+- TUYỆT ĐỐI KHÔNG sử dụng các ký tự Markdown đặc biệt như #, ##, ###, **, *, _, hoặc dấu huyền ngược (\`).
+- Khi trình bày lịch trình theo ngày, dùng dòng tiêu đề dạng "Ngày 1: <Chủ đề ngắn>" và các đầu mục dạng "• Sáng:", "• Trưa:", "• Chiều:", "• Tối:".
+
 QUY TẮC HIỂN THỊ GIÁ TIỀN (BẮT BUỘC):
-- Khi gợi ý hay nhắc đến bất kỳ địa điểm nào trong câu trả lời (cho dù là gợi ý đơn lẻ hay khi lập lịch trình), bạn BẮT BUỘC phải ghi kèm giá tiền của địa điểm đó ngay bên cạnh tên địa điểm trong dấu ngoặc đơn. 
+- Khi gợi ý hay nhắc đến bất kỳ địa điểm nào trong câu trả lời (cho dù là gợi ý đơn lẻ hay khi lập lịch trình), bạn BẮT BUỘC phải ghi kèm giá tiền của địa điểm đó ngay bên cạnh tên địa điểm trong dấu ngoặc đơn.
 - Định dạng hiển thị bắt buộc:
-  * Khách sạn: [Tên khách sạn] ([Giá phòng]đ/đêm) - Ví dụ: "Khách sạn Golden Holiday (1.200.000đ/đêm)".
-  * Điểm tham quan: [Tên điểm tham quan] ([Vé vào]đ) - Ví dụ: "Chùa Cầu (0đ)" hoặc "Nhà cổ Phùng Hưng (30.000đ)".
-  * Nhà hàng / Quán Cafe: [Tên địa điểm] ([Giá trung bình]đ) - Ví dụ: "Bánh mì Phượng (30.000đ)" hoặc "Nước Mót (15.000đ)".
+  • Khách sạn: Tên khách sạn (Giá phòngđ/đêm) - Ví dụ: "Khách sạn Golden Holiday (1.200.000đ/đêm)".
+  • Điểm tham quan: Tên điểm tham quan (Vé vàođ) - Ví dụ: "Chùa Cầu (0đ)" hoặc "Nhà cổ Phùng Hưng (30.000đ)".
+  • Nhà hàng / Quán Cafe: Tên địa điểm (Giá trung bìnhđ) - Ví dụ: "Bánh mì Phượng (30.000đ)" hoặc "Nước Mót (15.000đ)".
 - Tuyệt đối không tự ý lược bỏ thông tin giá tiền này trong mọi trường hợp.
 
-Khi người dùng đã cung cấp đủ yêu cầu và bạn lập lịch trình, hãy phản hồi trực tiếp lịch trình chi tiết theo từng ngày ngay trong nội dung tin nhắn dưới dạng Markdown rõ ràng, thân thiện. Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.
+Khi người dùng đã cung cấp đủ yêu cầu và bạn lập lịch trình, hãy phản hồi trực tiếp lịch trình chi tiết theo từng ngày ngay trong nội dung tin nhắn bằng văn bản sạch (không dùng ký tự Markdown). Tuyệt đối không dẫn giải dài dòng hay giới thiệu/yêu cầu người dùng bấm nút nào trên giao diện cả.
 
 DỮ LIỆU VÀ GIỚI HẠN GỢI Ý CỦA HỆ THỐNG:
 ${dbPlacesText}`
@@ -391,8 +423,9 @@ ${dbPlacesText}`
       throw geminiHttpError(res, response, data);
     }
 
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+    const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const reply = sanitizeChatReply(rawReply);
+
     // Save to database
     chatRecord.messages.push({ role: 'user', parts: [{ text: message }] });
     chatRecord.messages.push({ role: 'model', parts: [{ text: reply }] });
