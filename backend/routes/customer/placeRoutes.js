@@ -130,6 +130,9 @@ const router = express.Router();
  * /places/search:
  *   get:
  *     summary: Tìm kiếm tổng hợp trên tất cả loại địa điểm (Global Search)
+ *     description: |
+ *       Mỗi loại trả tối đa 10 kết quả (5 khi không có từ khóa và thành phố), xếp theo điểm đánh giá giảm dần,
+ *       cùng điểm thì nhiều lượt đánh giá trước, rồi theo tên A → Z.
  *     tags: [Places]
  *     parameters:
  *       - in: query

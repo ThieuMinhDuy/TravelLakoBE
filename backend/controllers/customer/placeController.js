@@ -131,12 +131,15 @@ const globalSearch = asyncHandler(async (req, res) => {
   }
 
   const limit = keyword || cityId ? 10 : 5;
+  // Đánh giá cao trước, cùng điểm thì nhiều lượt đánh giá trước, rồi theo tên.
+  // Không sắp xếp thì MongoDB trả theo thứ tự thêm vào, địa điểm tốt có thể bị limit cắt mất.
+  const sort = { rating: -1, numReviews: -1, name: 1 };
 
   const [attractions, hotels, restaurants, cafes] = await Promise.all([
-    Attraction.find(query).limit(limit).populate('city', 'name'),
-    Hotel.find(query).limit(limit).populate('city', 'name'),
-    Restaurant.find(query).limit(limit).populate('city', 'name'),
-    Cafe.find(query).limit(limit).populate('city', 'name'),
+    Attraction.find(query).sort(sort).limit(limit).populate('city', 'name'),
+    Hotel.find(query).sort(sort).limit(limit).populate('city', 'name'),
+    Restaurant.find(query).sort(sort).limit(limit).populate('city', 'name'),
+    Cafe.find(query).sort(sort).limit(limit).populate('city', 'name'),
   ]);
 
   res.json({
