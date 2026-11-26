@@ -97,7 +97,7 @@ router.use(protect, admin);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Review removed successfully"
+ *                   example: "Đã xóa đánh giá"
  *       401:
  *         description: Chưa xác thực
  *       403:

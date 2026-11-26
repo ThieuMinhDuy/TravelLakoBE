@@ -21,7 +21,7 @@ const protect = asyncHandler(async (req, res, next) => {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
     } catch (error) {
       console.error(error);
-      throw httpError(res, 401, 'Not authorized, token failed', ERROR_CODES.TOKEN_INVALID);
+      throw httpError(res, 401, 'Phiên đăng nhập không hợp lệ hoặc đã hết hạn, vui lòng đăng nhập lại', ERROR_CODES.TOKEN_INVALID);
     }
 
     req.user = await User.findById(decoded.userId).select('-password');
@@ -36,7 +36,7 @@ const protect = asyncHandler(async (req, res, next) => {
 
     next();
   } else {
-    throw httpError(res, 401, 'Not authorized, no token', ERROR_CODES.AUTH_REQUIRED);
+    throw httpError(res, 401, 'Vui lòng đăng nhập để tiếp tục', ERROR_CODES.AUTH_REQUIRED);
   }
 });
 
@@ -44,7 +44,7 @@ const admin = (req, res, next) => {
   if (req.user && req.user.isAdmin) {
     next();
   } else {
-    throw httpError(res, 403, 'Not authorized as an admin', ERROR_CODES.NOT_ADMIN);
+    throw httpError(res, 403, 'Bạn không có quyền quản trị', ERROR_CODES.NOT_ADMIN);
   }
 };
 

@@ -1,30 +1,17 @@
 import asyncHandler from 'express-async-handler';
 import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
-import Attraction from '../../models/attractionModel.js';
-import Hotel from '../../models/hotelModel.js';
-import Restaurant from '../../models/restaurantModel.js';
-import Cafe from '../../models/cafeModel.js';
 import Review from '../../models/reviewModel.js';
 import Favorite from '../../models/favoriteModel.js';
 import Trip from '../../models/tripModel.js';
 import { httpError, ERROR_CODES } from '../../utils/httpError.js';
+import { getPlaceModel, INVALID_PLACE_TYPE_MESSAGE, PLACE_NOT_FOUND_MESSAGE } from '../../utils/placeTypes.js';
 
-// Helper to map route parameter type to the corresponding Mongoose Model
-const getModelByType = (type) => {
-  switch (type.toLowerCase()) {
-    case 'attraction':
-      return Attraction;
-    case 'hotel':
-      return Hotel;
-    case 'restaurant':
-      return Restaurant;
-    case 'cafe':
-      return Cafe;
-    default:
-      return null;
-  }
-};
+// Loại địa điểm trên URL (attraction, hotel...) -> Mongoose Model
+const getModelByType = getPlaceModel;
+
+/** Địa điểm theo :id; ID sai định dạng coi như không tìm thấy */
+const findPlaceById = (Model, id) => (mongoose.isValidObjectId(id) ? Model.findById(id) : null);
 
 // Các field admin được phép ghi theo từng loại địa điểm.
 // Không cho ghi _id, rating, numReviews, createdAt... (rating/numReviews do hệ thống review tính).
@@ -37,13 +24,13 @@ const EDITABLE_FIELDS = {
 };
 
 /**
- * Kiểm tra thành phố gửi lên có tồn tại. ID sai định dạng cũng trả 400 "City not found"
- * (trước đây rơi vào CastError -> 404 "Resource not found", dễ nhầm là không tìm thấy địa điểm).
+ * Kiểm tra thành phố gửi lên có tồn tại. ID sai định dạng cũng trả 400 CITY_NOT_FOUND
+ * (trước đây rơi vào CastError -> 404, dễ nhầm là không tìm thấy địa điểm).
  */
 const assertCityExists = async (cityId, res) => {
   const cityExists = mongoose.isValidObjectId(cityId) ? await City.exists({ _id: cityId }) : null;
   if (!cityExists) {
-    throw httpError(res, 400, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+    throw httpError(res, 400, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 };
 
@@ -62,8 +49,7 @@ const pickEditableFields = (type, body = {}) => {
 const getPlaces = asyncHandler(async (req, res) => {
   const Model = getModelByType(req.params.type);
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   // Allow filtering by city if query is provided
@@ -85,17 +71,15 @@ const getPlaces = asyncHandler(async (req, res) => {
 const getPlaceById = asyncHandler(async (req, res) => {
   const Model = getModelByType(req.params.type);
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
-  const place = await Model.findById(req.params.id).populate('city', 'name');
+  const place = await findPlaceById(Model, req.params.id)?.populate('city', 'name');
 
   if (place) {
     res.json(place);
   } else {
-    res.status(404);
-    throw new Error('Place not found');
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 });
 
@@ -105,13 +89,12 @@ const getPlaceById = asyncHandler(async (req, res) => {
 const createPlace = asyncHandler(async (req, res) => {
   const Model = getModelByType(req.params.type);
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   // Validate if city exists
   if (!req.body.city) {
-    throw httpError(res, 400, 'City is required', ERROR_CODES.MISSING_FIELDS);
+    throw httpError(res, 400, 'Vui lòng chọn thành phố', ERROR_CODES.MISSING_FIELDS);
   }
   await assertCityExists(req.body.city, res);
 
@@ -129,8 +112,7 @@ const createPlace = asyncHandler(async (req, res) => {
 const updatePlace = asyncHandler(async (req, res) => {
   const Model = getModelByType(req.params.type);
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   // Validate if city exists if it is being updated
@@ -138,7 +120,7 @@ const updatePlace = asyncHandler(async (req, res) => {
     await assertCityExists(req.body.city, res);
   }
 
-  const place = await Model.findById(req.params.id);
+  const place = await findPlaceById(Model, req.params.id);
 
   if (place) {
     // Chỉ cập nhật các field được phép theo loại địa điểm
@@ -160,8 +142,7 @@ const updatePlace = asyncHandler(async (req, res) => {
     await updatedPlace.populate('city', 'name');
     res.json(updatedPlace);
   } else {
-    res.status(404);
-    throw new Error('Place not found');
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 });
 
@@ -171,11 +152,10 @@ const updatePlace = asyncHandler(async (req, res) => {
 const deletePlace = asyncHandler(async (req, res) => {
   const Model = getModelByType(req.params.type);
   if (!Model) {
-    res.status(400);
-    throw new Error('Invalid place type. Must be: attraction, hotel, restaurant, cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
-  const place = await Model.findById(req.params.id);
+  const place = await findPlaceById(Model, req.params.id);
 
   if (place) {
     // Xóa đánh giá, mục yêu thích của địa điểm này và gỡ nó khỏi lịch trình các chuyến đi
@@ -191,13 +171,12 @@ const deletePlace = asyncHandler(async (req, res) => {
 
     await Model.deleteOne({ _id: place._id });
     res.json({
-      message: 'Place removed successfully along with associated reviews',
+      message: 'Đã xóa địa điểm cùng các đánh giá và mục yêu thích liên quan',
       // Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình
       affectedTrips: tripUpdate.modifiedCount,
     });
   } else {
-    res.status(404);
-    throw new Error('Place not found');
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 });
 

@@ -38,7 +38,7 @@ const getCityById = asyncHandler(async (req, res) => {
   if (city) {
     res.json(city);
   } else {
-    throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 });
 
@@ -53,7 +53,7 @@ const createCity = asyncHandler(async (req, res) => {
   const cityExists = await findCityByName(normalizedName);
 
   if (cityExists) {
-    throw httpError(res, 400, 'City already exists', ERROR_CODES.CITY_EXISTS);
+    throw httpError(res, 400, 'Thành phố đã tồn tại', ERROR_CODES.CITY_EXISTS);
   }
 
   const city = new City({
@@ -81,7 +81,7 @@ const updateCity = asyncHandler(async (req, res) => {
       const normalizedName = requireCityName(name, res);
       const duplicate = await findCityByName(normalizedName, { excludeId: city._id });
       if (duplicate) {
-        throw httpError(res, 400, 'City already exists', ERROR_CODES.CITY_EXISTS);
+        throw httpError(res, 400, 'Thành phố đã tồn tại', ERROR_CODES.CITY_EXISTS);
       }
       city.name = normalizedName;
     }
@@ -97,7 +97,7 @@ const updateCity = asyncHandler(async (req, res) => {
     const updatedCity = await city.save();
     res.json(updatedCity);
   } else {
-    throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 });
 
@@ -108,7 +108,7 @@ const deleteCity = asyncHandler(async (req, res) => {
   const city = await City.findById(req.params.id);
 
   if (!city) {
-    throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 
   // 1. Chặn xóa khi còn chuyến đi của người dùng ở thành phố này (kể cả khi cascade=true):

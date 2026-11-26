@@ -245,7 +245,7 @@ router.use(protect, admin);
  *       201:
  *         description: Tạo thành công. `city` trả dạng object `{ _id, name }` giống GET danh sách
  *       400:
- *         description: Dữ liệu gửi lên lỗi (thiếu field bắt buộc, giá trị ngoài khoảng) hoặc không tìm thấy City ("City not found", kể cả ID sai định dạng)
+ *         description: Dữ liệu gửi lên lỗi (thiếu field bắt buộc, giá trị ngoài khoảng) hoặc không tìm thấy thành phố (`CITY_NOT_FOUND`, kể cả ID sai định dạng)
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -313,7 +313,7 @@ router.use(protect, admin);
  *       200:
  *         description: Cập nhật thành công. `city` trả dạng object `{ _id, name }` giống GET danh sách
  *       400:
- *         description: Dữ liệu lỗi hoặc thành phố mới không tồn tại ("City not found")
+ *         description: Dữ liệu lỗi hoặc thành phố mới không tồn tại (`CITY_NOT_FOUND`)
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -349,7 +349,7 @@ router.use(protect, admin);
  *               properties:
  *                 message:
  *                   type: string
- *                   example: "Place removed successfully along with associated reviews"
+ *                   example: "Đã xóa địa điểm cùng các đánh giá và mục yêu thích liên quan"
  *                 affectedTrips:
  *                   type: number
  *                   description: Số chuyến đi đã bị gỡ địa điểm này khỏi lịch trình

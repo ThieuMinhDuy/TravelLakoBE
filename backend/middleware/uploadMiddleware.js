@@ -1,3 +1,4 @@
+import { HttpError, ERROR_CODES } from '../utils/httpError.js';
 import path from 'path';
 import multer from 'multer';
 import { v2 as cloudinary } from 'cloudinary';
@@ -31,7 +32,7 @@ function checkFileTypes(file, cb) {
   if (extname && mimetype) {
     return cb(null, true);
   } else {
-    cb(new Error('Images only (jpg, jpeg, png, webp)'));
+    cb(new HttpError(400, 'Chỉ nhận ảnh định dạng JPG, JPEG, PNG hoặc WEBP', ERROR_CODES.INVALID_FILE_TYPE));
   }
 }
 
@@ -55,9 +56,13 @@ const uploadSingleImage = (field) => (req, res, next) => {
   upload.single(field)(req, res, (err) => {
     if (!err) return next();
 
-    res.status(400);
+    if (err instanceof HttpError) return next(err);
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return next(new Error('Ảnh vượt quá dung lượng cho phép (tối đa 5MB)'));
+      return next(new HttpError(400, 'Ảnh vượt quá dung lượng cho phép (tối đa 5MB)', ERROR_CODES.FILE_TOO_LARGE));
+    }
+    if (err instanceof multer.MulterError) {
+      // Sai tên field, gửi nhiều file... (câu gốc của multer là tiếng Anh)
+      return next(new HttpError(400, 'Dữ liệu ảnh gửi lên không hợp lệ (gửi 1 ảnh trong field "image")', ERROR_CODES.VALIDATION_ERROR));
     }
     return next(err);
   });
@@ -108,9 +113,9 @@ const uploadToCloudinary = async (localFilePath) => {
     console.error('[Upload] Cloudinary error:', error?.http_code, error?.message);
     const message = String(error?.message || '');
     if (error?.http_code === 401 || /invalid signature|api[ _]key|cloud[ _]name/i.test(message)) {
-      throw new Error('Máy chủ cấu hình lưu trữ ảnh (Cloudinary) chưa đúng. Vui lòng báo quản trị viên!');
+      throw new HttpError(500, 'Máy chủ cấu hình lưu trữ ảnh (Cloudinary) chưa đúng. Vui lòng báo quản trị viên!', ERROR_CODES.UPLOAD_FAILED);
     }
-    throw new Error('Tải ảnh lên thất bại, vui lòng thử lại!');
+    throw new HttpError(500, 'Tải ảnh lên thất bại, vui lòng thử lại!', ERROR_CODES.UPLOAD_FAILED);
   } finally {
     // Luôn xóa file tạm local (dù thành công hay thất bại) để tránh đầy thư mục uploads/
     removeLocalFile(localFilePath);

@@ -7,8 +7,8 @@ import { HttpError, ERROR_CODES } from './httpError.js';
 
 const USER_AGENT = 'TravelLakoPlannerAgent/1.0';
 
-// Giữ nguyên câu chữ cũ: FE đang dịch câu này (sẽ đổi cùng mục 13). FE nên nhận diện bằng code OSM_UNAVAILABLE.
-const OSM_BUSY_MESSAGE = 'All OpenStreetMap Overpass servers are currently busy or timed out. Please try again in a few moments.';
+// FE nhận diện lỗi này bằng code OSM_UNAVAILABLE, không dựa vào câu chữ
+const OSM_BUSY_MESSAGE = 'Máy chủ OpenStreetMap đang bận hoặc không phản hồi, vui lòng thử lại sau ít phút';
 const OSM_RETRY_AFTER_SECONDS = 60;
 
 const DEFAULT_OVERPASS_MIRRORS = [

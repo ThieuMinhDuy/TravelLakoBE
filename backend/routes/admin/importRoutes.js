@@ -120,7 +120,7 @@ router.get('/vietnam-cities', getVietnamCities);
  *                         enum: [Hotel, Attraction, Restaurant, Cafe]
  *                       description: Loại địa điểm mà Gemini lỗi (hết hạn mức, quá thời gian...)
  *             example:
- *               message: "Successfully imported places for Đà Lạt from OpenStreetMap"
+ *               message: "Đã import địa điểm cho Đà Lạt từ OpenStreetMap"
  *               source: overpass
  *               stats: { hotelsImported: 2, attractionsImported: 1, restaurantsImported: 1, cafesImported: 1, totalImported: 5 }
  *               enrichment: { aiGenerated: 4, templateGenerated: 1, geminiEnabled: true, failedTypes: ["Attraction"] }
@@ -142,7 +142,7 @@ router.get('/vietnam-cities', getVietnamCities);
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  *             example:
- *               message: "All OpenStreetMap Overpass servers are currently busy or timed out. Please try again in a few moments."
+ *               message: "Máy chủ OpenStreetMap đang bận hoặc không phản hồi, vui lòng thử lại sau ít phút"
  *               code: OSM_UNAVAILABLE
  *               retryAfter: 60
  *               stack: null
