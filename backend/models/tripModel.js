@@ -3,17 +3,17 @@ import mongoose from 'mongoose';
 const placeInScheduleSchema = mongoose.Schema({
   placeType: {
     type: String,
-    required: true,
-    enum: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'],
+    required: [true, 'Thiếu loại địa điểm trong lịch trình'],
+    enum: { values: ['Attraction', 'Hotel', 'Restaurant', 'Cafe'], message: 'Loại địa điểm không hợp lệ' },
   },
   placeId: {
     type: mongoose.Schema.Types.ObjectId,
-    required: true,
+    required: [true, 'Thiếu địa điểm trong lịch trình'],
     refPath: 'schedule.places.placeType',
   },
   order: {
     type: Number,
-    required: true,
+    required: [true, 'Thiếu thứ tự địa điểm trong lịch trình'],
   },
   note: {
     type: String,
@@ -31,11 +31,11 @@ const placeInScheduleSchema = mongoose.Schema({
 const dayScheduleSchema = mongoose.Schema({
   day: {
     type: Number,
-    required: true,
+    required: [true, 'Thiếu số thứ tự ngày trong lịch trình'],
   },
   date: {
     type: Date,
-    required: true,
+    required: [true, 'Thiếu ngày trong lịch trình'],
   },
   places: [placeInScheduleSchema],
 });
@@ -49,20 +49,20 @@ const tripSchema = mongoose.Schema(
     },
     title: {
       type: String,
-      required: true,
+      required: [true, 'Vui lòng nhập tên chuyến đi'],
     },
     city: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'City',
-      required: true,
+      required: [true, 'Vui lòng chọn thành phố'],
     },
     startDate: {
       type: Date,
-      required: true,
+      required: [true, 'Vui lòng chọn ngày bắt đầu'],
     },
     endDate: {
       type: Date,
-      required: true,
+      required: [true, 'Vui lòng chọn ngày kết thúc'],
     },
     budget: {
       type: Number,

@@ -5,11 +5,11 @@ const userSchema = mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, 'Vui lòng nhập họ tên'],
     },
     email: {
       type: String,
-      required: true,
+      required: [true, 'Vui lòng nhập email'],
       unique: true,
     },
     password: {

@@ -1,9 +1,14 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import Review from '../../models/reviewModel.js';
-import Attraction from '../../models/attractionModel.js';
-import Hotel from '../../models/hotelModel.js';
-import Restaurant from '../../models/restaurantModel.js';
-import Cafe from '../../models/cafeModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
+import {
+  findPlace,
+  getPlaceModel,
+  matchPlaceType,
+  INVALID_PLACE_TYPE_MESSAGE,
+  PLACE_NOT_FOUND_MESSAGE,
+} from '../../utils/placeTypes.js';
 
 // Helper to update rating and review count on a place
 const updatePlaceRating = async (itemId, itemType) => {
@@ -13,13 +18,7 @@ const updatePlaceRating = async (itemId, itemType) => {
     ? parseFloat((remainingReviews.reduce((acc, item) => acc + item.rating, 0) / numReviews).toFixed(1))
     : 0;
 
-  let Model;
-  const typeLower = itemType.toLowerCase();
-  if (typeLower === 'attraction') Model = Attraction;
-  else if (typeLower === 'hotel') Model = Hotel;
-  else if (typeLower === 'restaurant') Model = Restaurant;
-  else if (typeLower === 'cafe') Model = Cafe;
-
+  const Model = getPlaceModel(itemType);
   if (Model) {
     await Model.findByIdAndUpdate(itemId, { rating, numReviews });
   }
@@ -31,13 +30,14 @@ const updatePlaceRating = async (itemId, itemType) => {
 const getPlaceReviews = asyncHandler(async (req, res) => {
   const { itemType, itemId } = req.params;
 
-  const validTypes = ['Attraction', 'Hotel', 'Restaurant', 'Cafe'];
   // Case-insensitive mapping to valid types
-  const typeMatch = validTypes.find(t => t.toLowerCase() === itemType.toLowerCase());
-
+  const typeMatch = matchPlaceType(itemType);
   if (!typeMatch) {
-    res.status(400);
-    throw new Error('Invalid itemType. Must be: Attraction, Hotel, Restaurant, Cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
+  }
+  // ID sai định dạng: không có đánh giá nào (thay vì lỗi CastError)
+  if (!mongoose.isValidObjectId(itemId)) {
+    return res.json({ total: 0, reviews: [] });
   }
 
   const reviews = await Review.find({ itemId, itemType: typeMatch })
@@ -79,29 +79,18 @@ const createReview = asyncHandler(async (req, res) => {
   const { itemType, itemId, rating, comment } = req.body;
 
   if (!itemType || !itemId || !rating || !comment) {
-    res.status(400);
-    throw new Error('Please provide all fields: itemType, itemId, rating, comment');
+    throw httpError(res, 400, 'Vui lòng chọn số sao và nhập nội dung đánh giá', ERROR_CODES.MISSING_FIELDS);
   }
 
-  const validTypes = ['Attraction', 'Hotel', 'Restaurant', 'Cafe'];
-  const typeMatch = validTypes.find(t => t.toLowerCase() === itemType.toLowerCase());
-
+  const typeMatch = matchPlaceType(itemType);
   if (!typeMatch) {
-    res.status(400);
-    throw new Error('Invalid itemType. Must be: Attraction, Hotel, Restaurant, Cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   // Check if place exists
-  let Model;
-  if (typeMatch === 'Attraction') Model = Attraction;
-  else if (typeMatch === 'Hotel') Model = Hotel;
-  else if (typeMatch === 'Restaurant') Model = Restaurant;
-  else if (typeMatch === 'Cafe') Model = Cafe;
-
-  const place = await Model.findById(itemId);
+  const place = await findPlace(typeMatch, itemId);
   if (!place) {
-    res.status(404);
-    throw new Error(`${typeMatch} not found`);
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 
   // Optional: prevent multiple reviews from the same user on the same place
@@ -112,8 +101,7 @@ const createReview = asyncHandler(async (req, res) => {
   });
 
   if (alreadyReviewed) {
-    res.status(400);
-    throw new Error('You have already reviewed this place');
+    throw httpError(res, 400, 'Bạn đã đánh giá địa điểm này rồi', ERROR_CODES.REVIEW_EXISTS);
   }
 
   const review = new Review({
@@ -130,7 +118,7 @@ const createReview = asyncHandler(async (req, res) => {
   await updatePlaceRating(itemId, typeMatch);
 
   res.status(201).json({
-    message: 'Review added successfully',
+    message: 'Đã gửi đánh giá',
     review
   });
 });
@@ -139,17 +127,15 @@ const createReview = asyncHandler(async (req, res) => {
 // @route   DELETE /api/reviews/:id
 // @access  Private
 const deleteMyReview = asyncHandler(async (req, res) => {
-  const review = await Review.findById(req.params.id);
+  const review = mongoose.isValidObjectId(req.params.id) ? await Review.findById(req.params.id) : null;
 
   if (!review) {
-    res.status(404);
-    throw new Error('Review not found');
+    throw httpError(res, 404, 'Không tìm thấy đánh giá', ERROR_CODES.REVIEW_NOT_FOUND);
   }
 
   // Check review ownership
   if (review.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền xóa đánh giá này!');
+    throw httpError(res, 403, 'Bạn không có quyền xóa đánh giá này!', ERROR_CODES.NOT_OWNER);
   }
 
   const { itemId, itemType } = review;
@@ -159,7 +145,7 @@ const deleteMyReview = asyncHandler(async (req, res) => {
   // Recalculate average rating and numReviews
   await updatePlaceRating(itemId, itemType);
 
-  res.json({ message: 'Review removed successfully' });
+  res.json({ message: 'Đã xóa đánh giá' });
 });
 
 export { getPlaceReviews, getMyReviews, createReview, deleteMyReview };

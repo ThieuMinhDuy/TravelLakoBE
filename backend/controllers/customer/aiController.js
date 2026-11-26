@@ -1,4 +1,6 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
+import { HttpError, httpError, ERROR_CODES } from '../../utils/httpError.js';
 import City from '../../models/cityModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
@@ -7,6 +9,24 @@ import Cafe from '../../models/cafeModel.js';
 import Trip from '../../models/tripModel.js';
 import Chat from '../../models/chatModel.js';
 import { toSearchKey } from '../../utils/text.js';
+
+const AI_NOT_CONFIGURED_MESSAGE = 'Trợ lý AI chưa được cấu hình trên máy chủ, vui lòng báo quản trị viên';
+const AI_BUSY_MESSAGE = 'Trợ lý AI đang bận do vượt quá giới hạn yêu cầu. Vui lòng thử lại sau ít phút!';
+const AI_FAILED_MESSAGE = 'Trợ lý AI đang gặp sự cố, vui lòng thử lại sau';
+
+/** Lỗi khi gọi Gemini: 429 -> AI_BUSY, lỗi khác -> AI_FAILED. Câu gốc (tiếng Anh) của Gemini chỉ ghi log */
+const geminiHttpError = (res, response, data) => {
+  if (response.status === 429) return httpError(res, 429, AI_BUSY_MESSAGE, ERROR_CODES.AI_BUSY);
+  console.error(`[AI] Gemini HTTP ${response.status}:`, data?.error?.message);
+  return httpError(res, 502, AI_FAILED_MESSAGE, ERROR_CODES.AI_FAILED);
+};
+
+/** Trong khối try gọi Gemini: lỗi đã phân loại (HttpError, lỗi validate khi lưu) giữ nguyên; lỗi khác -> AI_FAILED */
+const toAiError = (res, error) => {
+  if (error instanceof HttpError || error?.name === 'ValidationError') return error;
+  console.error('[AI] Lỗi xử lý kết quả Gemini:', error);
+  return httpError(res, 502, AI_FAILED_MESSAGE, ERROR_CODES.AI_FAILED);
+};
 
 // Bỏ dấu tiếng Việt + chữ thường để so khớp tên (dùng chung với import / quản lý thành phố)
 const normalizeText = toSearchKey;
@@ -83,12 +103,12 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
 
   let targetCity = null;
   if (cityId) {
-    targetCity = await City.findById(cityId);
+    targetCity = mongoose.isValidObjectId(cityId) ? await City.findById(cityId) : null;
   } else {
     const textToSearch = notes || '';
+    // Không có lời nhắn thì vẫn có thể tìm thành phố trong lịch sử chat (khi lưu lịch trình từ chat)
     if (!textToSearch && !chatRecord?.messages?.length) {
-      res.status(400);
-      throw new Error('Vui lòng cung cấp cityId hoặc nhập lời nhắn có tên thành phố để trợ lý tìm kiếm.');
+      throw httpError(res, 400, 'Vui lòng chọn thành phố hoặc nhập lời nhắn có tên thành phố để trợ lý tìm kiếm.', ERROR_CODES.MISSING_FIELDS);
     }
     const citiesList = await City.find({});
     targetCity = findCityInText(citiesList, textToSearch);
@@ -101,8 +121,7 @@ const generateAISuggestion = asyncHandler(async (req, res) => {
   if (!targetCity) {
     const citiesList = await City.find({}, 'name');
     const availableCityNames = citiesList.map(c => c.name).join(', ');
-    res.status(400);
-    throw new Error(`Không tìm thấy thành phố nào tương thích. Các thành phố được hỗ trợ hiện tại: ${availableCityNames}`);
+    throw httpError(res, 400, `Không tìm thấy thành phố nào tương thích. Các thành phố được hỗ trợ hiện tại: ${availableCityNames}`, ERROR_CODES.CITY_NOT_FOUND);
   }
 
   // 1. Fetch places. If isParse is true, fetch all to make sure we can match whatever was chosen in chat.
@@ -188,8 +207,7 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
   // 4. Request Gemini API using direct REST endpoint
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) {
-    res.status(500);
-    throw new Error('Hệ thống chưa cấu hình API Key cho Trợ lý AI.');
+    throw httpError(res, 500, AI_NOT_CONFIGURED_MESSAGE, ERROR_CODES.AI_NOT_CONFIGURED);
   }
 
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=${geminiApiKey}`;
@@ -254,16 +272,12 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
     const data = await response.json();
 
     if (!response.ok) {
-      if (response.status === 429) {
-        res.status(429);
-        throw new Error('Trợ lý AI đang bận do vượt quá giới hạn yêu cầu (Quota Limit). Vui lòng thử lại sau ít phút!');
-      }
-      throw new Error(data.error?.message || 'Có lỗi xảy ra khi kết nối tới Gemini API.');
+      throw geminiHttpError(res, response, data);
     }
 
     const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!aiText) {
-      throw new Error('Trợ lý AI không phản hồi kết quả hợp lệ.');
+      throw httpError(res, 502, 'Trợ lý AI không phản hồi kết quả hợp lệ.', ERROR_CODES.AI_FAILED);
     }
 
     const resultJson = JSON.parse(aiText);
@@ -297,10 +311,7 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
     });
 
   } catch (error) {
-    if (res.statusCode === 200) {
-      res.status(500);
-    }
-    throw new Error(error.message || 'Lỗi trong quá trình xử lý đề xuất AI.');
+    throw toAiError(res, error);
   }
 });
 
@@ -313,14 +324,12 @@ const chatWithAI = asyncHandler(async (req, res) => {
   const { message } = req.body;
 
   if (!message) {
-    res.status(400);
-    throw new Error('Vui lòng nhập tin nhắn của bạn.');
+    throw httpError(res, 400, 'Vui lòng nhập tin nhắn của bạn.', ERROR_CODES.MISSING_FIELDS);
   }
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) {
-    res.status(500);
-    throw new Error('Gemini API key chưa được cấu hình ở file .env');
+    throw httpError(res, 500, AI_NOT_CONFIGURED_MESSAGE, ERROR_CODES.AI_NOT_CONFIGURED);
   }
 
   // 1. Fetch or create user's Chat document
@@ -437,11 +446,7 @@ ${dbPlacesText}`
 
     const data = await response.json();
     if (!response.ok) {
-      if (response.status === 429) {
-        res.status(429);
-        throw new Error('Trợ lý AI đang bận do vượt quá giới hạn yêu cầu (Quota Limit). Vui lòng thử lại sau ít phút!');
-      }
-      throw new Error(data.error?.message || 'Lỗi khi gọi Gemini API để chat.');
+      throw geminiHttpError(res, response, data);
     }
 
     const rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
@@ -454,8 +459,7 @@ ${dbPlacesText}`
 
     res.status(200).json({ reply });
   } catch (error) {
-    if (res.statusCode === 200) res.status(500);
-    throw error;
+    throw toAiError(res, error);
   }
 });
 
@@ -486,10 +490,8 @@ const clearChatHistory = asyncHandler(async (req, res) => {
  * @returns {Array} schedule mới để gán vào trip.schedule
  */
 const applyOptimizedOrder = (trip, optimizedSchedule, res) => {
-  const fail = (message) => {
-    res.status(400);
-    return new Error(`Lịch trình tối ưu không hợp lệ: ${message}`);
-  };
+  const fail = (message) =>
+    httpError(res, 400, `Lịch trình tối ưu không hợp lệ: ${message}`, ERROR_CODES.VALIDATION_ERROR);
 
   if (!Array.isArray(optimizedSchedule)) {
     throw fail('optimizedSchedule phải là một mảng các ngày.');
@@ -559,10 +561,11 @@ const applyOptimizedOrder = (trip, optimizedSchedule, res) => {
 // @route   POST /api/ai/optimize/:tripId
 // @access  Private
 const optimizeExistingTrip = asyncHandler(async (req, res) => {
-  const trip = await Trip.findOne({ _id: req.params.tripId, user: req.user._id });
+  const trip = mongoose.isValidObjectId(req.params.tripId)
+    ? await Trip.findOne({ _id: req.params.tripId, user: req.user._id })
+    : null;
   if (!trip) {
-    res.status(404);
-    throw new Error('Chuyến đi không tồn tại hoặc bạn không có quyền chỉnh sửa.');
+    throw httpError(res, 404, 'Chuyến đi không tồn tại hoặc bạn không có quyền chỉnh sửa.', ERROR_CODES.TRIP_NOT_FOUND);
   }
 
   // If frontend already has optimizedSchedule, save it directly to avoid double Gemini calls.
@@ -575,8 +578,7 @@ const optimizeExistingTrip = asyncHandler(async (req, res) => {
 
   const geminiApiKey = process.env.GEMINI_API_KEY;
   if (!geminiApiKey) {
-    res.status(500);
-    throw new Error('Gemini API key chưa được cấu hình ở file .env');
+    throw httpError(res, 500, AI_NOT_CONFIGURED_MESSAGE, ERROR_CODES.AI_NOT_CONFIGURED);
   }
 
   // Pre-load all place coordinates for each day
@@ -706,11 +708,7 @@ Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đ
 
     const data = await response.json();
     if (!response.ok) {
-      if (response.status === 429) {
-        res.status(429);
-        throw new Error('Trợ lý AI đang bận do vượt quá giới hạn yêu cầu (Quota Limit). Vui lòng thử lại sau ít phút!');
-      }
-      throw new Error(data.error?.message || 'Lỗi khi gọi Gemini API để tối ưu.');
+      throw geminiHttpError(res, response, data);
     }
 
     const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -773,8 +771,7 @@ Lưu ý thêm từ người dùng: ${req.body.notes || 'Tối ưu hóa quãng đ
     }
 
   } catch (err) {
-    if (res.statusCode === 200) res.status(500);
-    throw err;
+    throw toAiError(res, err);
   }
 });
 

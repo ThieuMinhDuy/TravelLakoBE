@@ -1,9 +1,8 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import Favorite from '../../models/favoriteModel.js';
-import Attraction from '../../models/attractionModel.js';
-import Hotel from '../../models/hotelModel.js';
-import Restaurant from '../../models/restaurantModel.js';
-import Cafe from '../../models/cafeModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
+import { findPlace, matchPlaceType, INVALID_PLACE_TYPE_MESSAGE, PLACE_NOT_FOUND_MESSAGE } from '../../utils/placeTypes.js';
 
 // @desc    Get user favorites list
 // @route   GET /api/favorites
@@ -31,29 +30,18 @@ const addFavorite = asyncHandler(async (req, res) => {
   const { itemType, itemId } = req.body;
 
   if (!itemType || !itemId) {
-    res.status(400);
-    throw new Error('Please provide itemType and itemId');
+    throw httpError(res, 400, 'Vui lòng chọn địa điểm cần thêm vào yêu thích (itemType, itemId)', ERROR_CODES.MISSING_FIELDS);
   }
 
-  const validTypes = ['Attraction', 'Hotel', 'Restaurant', 'Cafe'];
-  const typeMatch = validTypes.find(t => t.toLowerCase() === itemType.toLowerCase());
-
+  const typeMatch = matchPlaceType(itemType);
   if (!typeMatch) {
-    res.status(400);
-    throw new Error('Invalid itemType. Must be: Attraction, Hotel, Restaurant, Cafe');
+    throw httpError(res, 400, INVALID_PLACE_TYPE_MESSAGE, ERROR_CODES.INVALID_PLACE_TYPE);
   }
 
   // Check if place exists
-  let Model;
-  if (typeMatch === 'Attraction') Model = Attraction;
-  else if (typeMatch === 'Hotel') Model = Hotel;
-  else if (typeMatch === 'Restaurant') Model = Restaurant;
-  else if (typeMatch === 'Cafe') Model = Cafe;
-
-  const place = await Model.findById(itemId);
+  const place = await findPlace(typeMatch, itemId);
   if (!place) {
-    res.status(404);
-    throw new Error(`${typeMatch} not found`);
+    throw httpError(res, 404, PLACE_NOT_FOUND_MESSAGE, ERROR_CODES.PLACE_NOT_FOUND);
   }
 
   // Check if already favorited
@@ -64,8 +52,7 @@ const addFavorite = asyncHandler(async (req, res) => {
   });
 
   if (favoriteExists) {
-    res.status(400);
-    throw new Error('This place is already in your favorites');
+    throw httpError(res, 400, 'Địa điểm này đã có trong danh sách yêu thích của bạn', ERROR_CODES.FAVORITE_EXISTS);
   }
 
   const favorite = new Favorite({
@@ -77,7 +64,7 @@ const addFavorite = asyncHandler(async (req, res) => {
   const createdFavorite = await favorite.save();
 
   res.status(201).json({
-    message: 'Added to favorites successfully',
+    message: 'Đã thêm vào danh sách yêu thích',
     favorite: createdFavorite
   });
 });
@@ -86,22 +73,20 @@ const addFavorite = asyncHandler(async (req, res) => {
 // @route   DELETE /api/favorites/:id
 // @access  Private
 const removeFavorite = asyncHandler(async (req, res) => {
-  const favorite = await Favorite.findById(req.params.id);
+  const favorite = mongoose.isValidObjectId(req.params.id) ? await Favorite.findById(req.params.id) : null;
 
   if (!favorite) {
-    res.status(404);
-    throw new Error('Favorite not found');
+    throw httpError(res, 404, 'Không tìm thấy mục yêu thích', ERROR_CODES.FAVORITE_NOT_FOUND);
   }
 
   // Check ownership
   if (favorite.user.toString() !== req.user._id.toString()) {
-    res.status(403);
-    throw new Error('Bạn không có quyền xóa mục yêu thích này!');
+    throw httpError(res, 403, 'Bạn không có quyền xóa mục yêu thích này!', ERROR_CODES.NOT_OWNER);
   }
 
   await Favorite.deleteOne({ _id: req.params.id });
 
-  res.json({ message: 'Removed from favorites successfully' });
+  res.json({ message: 'Đã xóa khỏi danh sách yêu thích' });
 });
 
 export { getMyFavorites, addFavorite, removeFavorite };

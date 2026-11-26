@@ -1,5 +1,7 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 
 // @desc    Get all cities
 // @route   GET /api/cities
@@ -16,13 +18,12 @@ const getCities = asyncHandler(async (req, res) => {
 // @route   GET /api/cities/:id
 // @access  Public
 const getCityById = asyncHandler(async (req, res) => {
-  const city = await City.findById(req.params.id);
+  const city = mongoose.isValidObjectId(req.params.id) ? await City.findById(req.params.id) : null;
 
   if (city) {
     res.json(city);
   } else {
-    res.status(404);
-    throw new Error('City not found');
+    throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
   }
 });
 

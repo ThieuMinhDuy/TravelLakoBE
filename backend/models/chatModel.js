@@ -3,14 +3,14 @@ import mongoose from 'mongoose';
 const chatMessageSchema = mongoose.Schema({
   role: {
     type: String,
-    required: true,
-    enum: ['user', 'model', 'assistant']
+    required: [true, 'Thiếu vai trò của tin nhắn'],
+    enum: { values: ['user', 'model', 'assistant'], message: 'Vai trò tin nhắn không hợp lệ' },
   },
   parts: [
     {
       text: {
         type: String,
-        required: true,
+        required: [true, 'Tin nhắn không được để trống'],
       }
     }
   ]

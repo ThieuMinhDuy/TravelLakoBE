@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 import validator from 'validator';
 import User from '../../models/userModel.js';
 import Trip from '../../models/tripModel.js';
@@ -29,8 +30,7 @@ const getUserById = asyncHandler(async (req, res) => {
   if (user) {
     res.json(user);
   } else {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'Không tìm thấy người dùng', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -44,30 +44,25 @@ const updateUser = asyncHandler(async (req, res) => {
     const { name, email, isAdmin, isBlocked } = req.body;
 
     if (name !== undefined && (typeof name !== 'string' || name.trim() === '')) {
-      res.status(400);
-      throw new Error('Tên người dùng không hợp lệ!');
+      throw httpError(res, 400, 'Tên người dùng không hợp lệ!', ERROR_CODES.VALIDATION_ERROR);
     }
 
     if (isAdmin !== undefined && typeof isAdmin !== 'boolean') {
-      res.status(400);
-      throw new Error('isAdmin phải là true hoặc false');
+      throw httpError(res, 400, 'isAdmin phải là true hoặc false', ERROR_CODES.VALIDATION_ERROR);
     }
 
     if (isBlocked !== undefined && typeof isBlocked !== 'boolean') {
-      res.status(400);
-      throw new Error('isBlocked phải là true hoặc false');
+      throw httpError(res, 400, 'isBlocked phải là true hoặc false', ERROR_CODES.VALIDATION_ERROR);
     }
 
     // Đổi email: phải đúng định dạng và chưa được tài khoản khác sử dụng
     if (email !== undefined && email !== user.email) {
       if (typeof email !== 'string' || !validator.isEmail(email)) {
-        res.status(400);
-        throw new Error('Email không hợp lệ!');
+        throw httpError(res, 400, 'Email không hợp lệ!', ERROR_CODES.INVALID_EMAIL);
       }
       const emailTaken = await User.exists({ email, _id: { $ne: user._id } });
       if (emailTaken) {
-        res.status(400);
-        throw new Error('Email này đã được tài khoản khác sử dụng!');
+        throw httpError(res, 400, 'Email này đã được tài khoản khác sử dụng!', ERROR_CODES.EMAIL_EXISTS);
       }
     }
 
@@ -76,16 +71,14 @@ const updateUser = asyncHandler(async (req, res) => {
 
     // Admin không được tự gỡ quyền hoặc tự khóa chính mình
     if (isSelf && user.isAdmin && willLoseAdmin) {
-      res.status(400);
-      throw new Error('Bạn không thể tự gỡ quyền Admin hoặc tự khóa tài khoản của chính mình!');
+      throw httpError(res, 400, 'Bạn không thể tự gỡ quyền Admin hoặc tự khóa tài khoản của chính mình!', ERROR_CODES.CANNOT_MODIFY_SELF);
     }
 
     // Không được gỡ quyền / khóa admin cuối cùng còn hoạt động
     if (user.isAdmin && !user.isBlocked && willLoseAdmin) {
       const activeAdmins = await User.countDocuments({ isAdmin: true, isBlocked: false });
       if (activeAdmins <= 1) {
-        res.status(400);
-        throw new Error('Không thể gỡ quyền hoặc khóa quản trị viên cuối cùng!');
+        throw httpError(res, 400, 'Không thể gỡ quyền hoặc khóa quản trị viên cuối cùng!', ERROR_CODES.LAST_ADMIN);
       }
     }
 
@@ -105,8 +98,7 @@ const updateUser = asyncHandler(async (req, res) => {
       isBlocked: updatedUser.isBlocked,
     });
   } else {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'Không tìm thấy người dùng', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -118,13 +110,11 @@ const deleteUser = asyncHandler(async (req, res) => {
 
   if (user) {
     if (user._id.toString() === req.user._id.toString()) {
-      res.status(400);
-      throw new Error('Bạn không thể tự xóa tài khoản của chính mình!');
+      throw httpError(res, 400, 'Bạn không thể tự xóa tài khoản của chính mình!', ERROR_CODES.CANNOT_MODIFY_SELF);
     }
 
     if (user.isAdmin && (await User.countDocuments({ isAdmin: true })) <= 1) {
-      res.status(400);
-      throw new Error('Cannot delete the last administrator');
+      throw httpError(res, 400, 'Không thể xóa quản trị viên cuối cùng!', ERROR_CODES.LAST_ADMIN);
     }
 
     // 1. Tìm các review của user này để biết những địa điểm nào bị ảnh hưởng
@@ -169,10 +159,9 @@ const deleteUser = asyncHandler(async (req, res) => {
 
     // 4. Xóa chính người dùng
     await User.deleteOne({ _id: req.params.id });
-    res.json({ message: 'User and all associated data (trips, favorites, reviews) removed successfully' });
+    res.json({ message: 'Đã xóa người dùng cùng toàn bộ chuyến đi, mục yêu thích và đánh giá của họ' });
   } else {
-    res.status(404);
-    throw new Error('User not found');
+    throw httpError(res, 404, 'Không tìm thấy người dùng', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 

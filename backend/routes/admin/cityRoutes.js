@@ -98,7 +98,7 @@ router.use(protect, admin);
  *             schema:
  *               $ref: '#/components/schemas/City'
  *       400:
- *         description: Tên trống, thành phố đã tồn tại ("City already exists", kể cả khi chỉ khác dấu như "Da Lat" / "Đà Lạt") hoặc dữ liệu thiếu
+ *         description: Tên trống, thành phố đã tồn tại (`CITY_EXISTS`, kể cả khi chỉ khác dấu như "Da Lat" / "Đà Lạt") hoặc dữ liệu thiếu
  *       401:
  *         description: Chưa xác thực
  *       403:
@@ -163,7 +163,7 @@ router.use(protect, admin);
  *             schema:
  *               $ref: '#/components/schemas/City'
  *       400:
- *         description: Tên gửi lên rỗng hoặc trùng với thành phố khác ("City already exists")
+ *         description: Tên gửi lên rỗng hoặc trùng với thành phố khác (`CITY_EXISTS`)
  *       401:
  *         description: Chưa xác thực
  *       403:

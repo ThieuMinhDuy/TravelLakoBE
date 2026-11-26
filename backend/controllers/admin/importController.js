@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import mongoose from 'mongoose';
 import City from '../../models/cityModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
@@ -195,7 +196,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   const { cityId, cityName, limit } = req.body;
 
   if (!cityId && !cityName) {
-    throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
+    throw httpError(res, 400, 'Vui lòng chọn thành phố cần import', ERROR_CODES.MISSING_FIELDS);
   }
 
   // Số địa điểm MỚI tối đa cho MỖI loại theo tham số limit của Admin (1-50, mặc định 30).
@@ -210,15 +211,15 @@ const importFromOSM = asyncHandler(async (req, res) => {
   let coordinates;
 
   if (cityId) {
-    city = await City.findById(cityId);
+    city = mongoose.isValidObjectId(cityId) ? await City.findById(cityId) : null;
     if (!city) {
-      throw httpError(res, 404, 'City not found', ERROR_CODES.CITY_NOT_FOUND);
+      throw httpError(res, 404, 'Không tìm thấy thành phố', ERROR_CODES.CITY_NOT_FOUND);
     }
   } else {
     // Tìm theo tên thành phố, không phân biệt hoa/thường và dấu:
     // đã có "Da Lat" thì import "Đà Lạt" sẽ dùng lại thành phố đó, không tạo trùng
     if (typeof cityName !== 'string' || !cityName.trim()) {
-      throw httpError(res, 400, 'Please provide either cityId or cityName', ERROR_CODES.MISSING_FIELDS);
+      throw httpError(res, 400, 'Vui lòng chọn thành phố cần import', ERROR_CODES.MISSING_FIELDS);
     }
     newCityName = cityName.trim();
     city = await findCityByName(newCityName);
@@ -231,8 +232,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   if (city) {
     const { lat, lng } = city.coordinates || {};
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-      res.status(400);
-      throw new Error('City coordinates are missing');
+      throw httpError(res, 400, 'Thành phố chưa có tọa độ, vui lòng cập nhật tọa độ trước khi import', ERROR_CODES.VALIDATION_ERROR);
     }
     coordinates = { lat, lng };
   }
@@ -330,7 +330,7 @@ const importFromOSM = asyncHandler(async (req, res) => {
   orderedStats.totalImported = aiGenerated + templateGenerated;
 
   res.json({
-    message: `Successfully imported places for ${city.name} from OpenStreetMap`,
+    message: `Đã import địa điểm cho ${city.name} từ OpenStreetMap`,
     // Nguồn dữ liệu: 'overpass' (chính) | 'nominatim' (dự phòng khi Overpass quá tải; ít địa điểm hơn)
     source,
     stats: orderedStats,

@@ -69,7 +69,7 @@ const authUser = asyncHandler(async (req, res) => {
       token,
     });
   } else {
-    throw httpError(res, 401, 'Invalid email or password', ERROR_CODES.INVALID_CREDENTIALS);
+    throw httpError(res, 401, 'Email hoặc mật khẩu không chính xác!', ERROR_CODES.INVALID_CREDENTIALS);
   }
 });
 
@@ -165,7 +165,7 @@ const registerUser = asyncHandler(async (req, res) => {
 // @access  Public
 const logoutUser = (req, res) => {
   clearTokenCookie(res);
-  res.status(200).json({ message: 'Logged out successfully' });
+  res.status(200).json({ message: 'Đã đăng xuất' });
 };
 
 /**
@@ -295,7 +295,7 @@ const getUserProfile = asyncHandler(async (req, res) => {
       },
     });
   } else {
-    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -322,7 +322,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
     res.json(buildProfileResponse(updatedUser));
   } else {
-    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 });
 
@@ -338,7 +338,7 @@ const changePassword = asyncHandler(async (req, res) => {
 
   const user = await User.findById(req.user._id);
   if (!user) {
-    throw httpError(res, 404, 'User not found', ERROR_CODES.USER_NOT_FOUND);
+    throw httpError(res, 404, 'Không tìm thấy người dùng!', ERROR_CODES.USER_NOT_FOUND);
   }
 
   // Tài khoản đã có mật khẩu: bắt buộc xác minh mật khẩu hiện tại.

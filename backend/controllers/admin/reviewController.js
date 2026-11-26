@@ -1,4 +1,5 @@
 import asyncHandler from 'express-async-handler';
+import { httpError, ERROR_CODES } from '../../utils/httpError.js';
 import Review from '../../models/reviewModel.js';
 import Attraction from '../../models/attractionModel.js';
 import Hotel from '../../models/hotelModel.js';
@@ -22,8 +23,7 @@ const getReviews = asyncHandler(async (req, res) => {
   if (req.query.itemType !== undefined && req.query.itemType !== '') {
     itemType = ITEM_TYPE_MAP[String(req.query.itemType).toLowerCase()];
     if (!itemType) {
-      res.status(400);
-      throw new Error('Loại địa điểm không hợp lệ. Chỉ nhận: attraction, hotel, restaurant, cafe');
+      throw httpError(res, 400, 'Loại địa điểm không hợp lệ. Chỉ nhận: attraction, hotel, restaurant, cafe', ERROR_CODES.INVALID_PLACE_TYPE);
     }
   }
   const filter = {};
@@ -114,10 +114,9 @@ const deleteReview = asyncHandler(async (req, res) => {
       await Model.findByIdAndUpdate(itemId, { rating, numReviews });
     }
 
-    res.json({ message: 'Review removed successfully' });
+    res.json({ message: 'Đã xóa đánh giá' });
   } else {
-    res.status(404);
-    throw new Error('Review not found');
+    throw httpError(res, 404, 'Không tìm thấy đánh giá', ERROR_CODES.REVIEW_NOT_FOUND);
   }
 });
 
