@@ -118,6 +118,7 @@ import {
  *             properties:
  *               name:
  *                 type: string
+ *                 description: 2-50 ký tự sau khi bỏ khoảng trắng hai đầu
  *               email:
  *                 type: string
  *               password:
@@ -206,21 +207,28 @@ import {
  *             properties:
  *               name:
  *                 type: string
+ *                 description: 2-50 ký tự sau khi bỏ khoảng trắng hai đầu
  *               avatar:
  *                 type: string
+ *                 description: URL http(s) từ POST /upload, hoặc '' để xóa ảnh đại diện
  *               coverImage:
  *                 type: string
  *                 description: URL http(s) từ POST /upload, hoặc '' để xóa ảnh bìa
  *               phone:
  *                 type: string
+ *                 description: 10 chữ số bắt đầu bằng 0, hoặc '' để xóa
  *               gender:
  *                 type: string
  *                 enum: [Nam, Nữ, Khác, '']
  *               dateOfBirth:
  *                 type: string
  *                 format: date
+ *                 nullable: true
+ *                 description: Từ 1900 tới hôm nay; null hoặc '' để xóa ngày sinh
  *               travelPreferences:
  *                 type: array
+ *                 maxItems: 6
+ *                 description: Tối đa 6 mục, mỗi mục tối đa 50 ký tự (bỏ mục rỗng và mục trùng)
  *                 items:
  *                   type: string
  *               favoriteBudget:
@@ -234,7 +242,17 @@ import {
  *             schema:
  *               $ref: '#/components/schemas/UserProfile'
  *       400:
- *         description: coverImage không phải URL http(s) hợp lệ, hoặc body có `password` (phải dùng PUT /auth/change-password)
+ *         description: |
+ *           `VALIDATION_ERROR`: một hoặc nhiều field không hợp lệ (message gộp mọi lỗi, cách nhau bởi ". ";
+ *           không field nào được lưu), hoặc body có `password` (phải dùng PUT /auth/change-password)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *             example:
+ *               message: "Số điện thoại phải gồm 10 chữ số, bắt đầu bằng 0. Ngày sinh không được ở tương lai"
+ *               code: VALIDATION_ERROR
+ *               stack: null
  *       401:
  *         description: Chưa xác thực
  *       404:

@@ -40,7 +40,7 @@ const userSchema = mongoose.Schema(
     },
     gender: {
       type: String,
-      enum: ['Nam', 'Nữ', 'Khác', ''],
+      enum: { values: ['Nam', 'Nữ', 'Khác', ''], message: 'Giới tính không hợp lệ' },
       default: '',
     },
     dateOfBirth: {
@@ -53,7 +53,7 @@ const userSchema = mongoose.Schema(
     },
     favoriteBudget: {
       type: String,
-      enum: ['Tiết kiệm', 'Trung bình', 'Cao cấp', ''],
+      enum: { values: ['Tiết kiệm', 'Trung bình', 'Cao cấp', ''], message: 'Mức ngân sách không hợp lệ' },
       default: '',
     },
     isVerified: {

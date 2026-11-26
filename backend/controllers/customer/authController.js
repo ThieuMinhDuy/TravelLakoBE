@@ -26,6 +26,17 @@ const STRONG_PASSWORD_OPTIONS = {
  */
 const isNonEmptyString = (value) => typeof value === 'string' && value.trim() !== '';
 
+const NAME_MIN_LENGTH = 2;
+const NAME_MAX_LENGTH = 50;
+const NAME_ERROR = `Họ tên phải từ ${NAME_MIN_LENGTH} đến ${NAME_MAX_LENGTH} ký tự`;
+
+/** Họ tên đã bỏ khoảng trắng hai đầu nếu dài 2-50 ký tự, ngược lại null */
+const normalizeName = (value) => {
+  if (typeof value !== 'string') return null;
+  const name = value.trim();
+  return name.length >= NAME_MIN_LENGTH && name.length <= NAME_MAX_LENGTH ? name : null;
+};
+
 // @desc    Auth user & get token
 const authUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
@@ -73,6 +84,11 @@ const registerUser = asyncHandler(async (req, res) => {
     throw httpError(res, 400, 'Vui lòng nhập đầy đủ Họ tên, Email và Mật khẩu!', ERROR_CODES.MISSING_FIELDS);
   }
 
+  const trimmedName = normalizeName(name);
+  if (!trimmedName) {
+    throw httpError(res, 400, NAME_ERROR, ERROR_CODES.VALIDATION_ERROR);
+  }
+
   // 2. Kiểm tra định dạng email (Chỉ chấp nhận đuôi @gmail.com)
   const emailLower = email.toLowerCase();
   if (!validator.isEmail(email) || !emailLower.endsWith('@gmail.com')) {
@@ -93,7 +109,7 @@ const registerUser = asyncHandler(async (req, res) => {
     } else {
       // Nếu email đã đăng ký nhưng chưa xác thực, cập nhật lại thông tin mới và gửi OTP mới
       assertOtpCooldown(userExists, res);
-      userExists.name = name;
+      userExists.name = trimmedName;
       userExists.password = password;
       const otpCode = issueOtp(userExists);
       await userExists.save();
@@ -102,7 +118,7 @@ const registerUser = asyncHandler(async (req, res) => {
       await sendEmail({
         to: email,
         subject: 'Mã xác thực đăng ký tài khoản - TravelLako',
-        html: `<h3>Chào ${name},</h3>
+        html: `<h3>Chào ${trimmedName},</h3>
                <p>Mã OTP để xác thực tài khoản đăng ký của bạn là: <b>${otpCode}</b></p>
                <p>Mã này có hiệu lực trong vòng 5 phút.</p>`,
       });
@@ -116,7 +132,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
   // 5. Lưu user mới vào MongoDB với isVerified = false
   const user = new User({
-    name,
+    name: trimmedName,
     email,
     password,
     isVerified: false,
@@ -178,6 +194,84 @@ const isValidImageUrlOrEmpty = (value) =>
   (value === '' ||
     validator.isURL(value, { protocols: ['http', 'https'], require_protocol: true, require_tld: false }));
 
+const PHONE_REGEX = /^(0\d{9})?$/; // rỗng (xóa số) hoặc 10 chữ số bắt đầu bằng 0
+const GENDERS = ['Nam', 'Nữ', 'Khác', ''];
+const BUDGETS = ['Tiết kiệm', 'Trung bình', 'Cao cấp', ''];
+const MAX_TRAVEL_PREFERENCES = 6;
+const MAX_TRAVEL_PREFERENCE_LENGTH = 50;
+const MIN_DATE_OF_BIRTH = new Date('1900-01-01T00:00:00.000Z');
+
+/**
+ * Kiểm tra và chuẩn hóa dữ liệu PUT /api/auth/profile. Field không gửi lên thì giữ nguyên.
+ * @returns {{ updates: Record<string, unknown>, errors: string[] }}
+ */
+const parseProfileUpdates = (body) => {
+  const updates = {};
+  const errors = [];
+
+  if (body.name !== undefined) {
+    const name = normalizeName(body.name);
+    if (name) updates.name = name;
+    else errors.push(NAME_ERROR);
+  }
+
+  if (body.avatar !== undefined) {
+    if (isValidImageUrlOrEmpty(body.avatar)) updates.avatar = body.avatar;
+    else errors.push('Ảnh đại diện không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.');
+  }
+
+  if (body.coverImage !== undefined) {
+    if (isValidImageUrlOrEmpty(body.coverImage)) updates.coverImage = body.coverImage;
+    else errors.push('Ảnh bìa không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.');
+  }
+
+  if (body.phone !== undefined) {
+    const phone = typeof body.phone === 'string' ? body.phone.trim() : null;
+    if (phone !== null && PHONE_REGEX.test(phone)) updates.phone = phone;
+    else errors.push('Số điện thoại phải gồm 10 chữ số, bắt đầu bằng 0');
+  }
+
+  if (body.gender !== undefined) {
+    if (GENDERS.includes(body.gender)) updates.gender = body.gender;
+    else errors.push('Giới tính không hợp lệ');
+  }
+
+  if (body.favoriteBudget !== undefined) {
+    if (BUDGETS.includes(body.favoriteBudget)) updates.favoriteBudget = body.favoriteBudget;
+    else errors.push('Mức ngân sách không hợp lệ');
+  }
+
+  if (body.dateOfBirth !== undefined) {
+    if (body.dateOfBirth === null || body.dateOfBirth === '') {
+      updates.dateOfBirth = null; // xóa ngày sinh
+    } else {
+      const date = typeof body.dateOfBirth === 'string' ? new Date(body.dateOfBirth) : null;
+      if (!date || Number.isNaN(date.getTime()) || date < MIN_DATE_OF_BIRTH) errors.push('Ngày sinh không hợp lệ');
+      else if (date > new Date()) errors.push('Ngày sinh không được ở tương lai');
+      else updates.dateOfBirth = date;
+    }
+  }
+
+  if (body.travelPreferences !== undefined) {
+    const list = body.travelPreferences;
+    if (!Array.isArray(list) || !list.every((item) => typeof item === 'string')) {
+      errors.push('Sở thích du lịch phải là danh sách chữ');
+    } else {
+      // Bỏ khoảng trắng, mục rỗng và mục trùng
+      const preferences = [...new Set(list.map((item) => item.trim()).filter(Boolean))];
+      if (preferences.length > MAX_TRAVEL_PREFERENCES) {
+        errors.push(`Chỉ được chọn tối đa ${MAX_TRAVEL_PREFERENCES} sở thích du lịch`);
+      } else if (preferences.some((item) => item.length > MAX_TRAVEL_PREFERENCE_LENGTH)) {
+        errors.push(`Mỗi sở thích du lịch tối đa ${MAX_TRAVEL_PREFERENCE_LENGTH} ký tự`);
+      } else {
+        updates.travelPreferences = preferences;
+      }
+    }
+  }
+
+  return { updates, errors };
+};
+
 // @desc    Get user profile
 // @route   GET /api/auth/profile
 // @access  Private
@@ -217,39 +311,12 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       throw httpError(res, 400, 'Vui lòng dùng chức năng Đổi mật khẩu', ERROR_CODES.VALIDATION_ERROR);
     }
 
-    if (req.body.coverImage !== undefined && !isValidImageUrlOrEmpty(req.body.coverImage)) {
-      throw httpError(res, 400, 'Ảnh bìa không hợp lệ! Vui lòng tải ảnh lên và dùng URL http(s) được trả về.', ERROR_CODES.VALIDATION_ERROR);
+    // Kiểm tra mọi field trước khi ghi: có lỗi thì không lưu gì, báo tất cả lỗi trong 1 câu
+    const { updates, errors } = parseProfileUpdates(req.body);
+    if (errors.length) {
+      throw httpError(res, 400, errors.join('. '), ERROR_CODES.VALIDATION_ERROR);
     }
-
-    user.name = req.body.name || user.name;
-
-    if (req.body.avatar !== undefined) {
-      user.avatar = req.body.avatar;
-    }
-
-    if (req.body.coverImage !== undefined) {
-      user.coverImage = req.body.coverImage;
-    }
-
-    if (req.body.phone !== undefined) {
-      user.phone = req.body.phone;
-    }
-
-    if (req.body.gender !== undefined) {
-      user.gender = req.body.gender;
-    }
-
-    if (req.body.dateOfBirth !== undefined) {
-      user.dateOfBirth = req.body.dateOfBirth;
-    }
-
-    if (req.body.travelPreferences !== undefined) {
-      user.travelPreferences = req.body.travelPreferences;
-    }
-
-    if (req.body.favoriteBudget !== undefined) {
-      user.favoriteBudget = req.body.favoriteBudget;
-    }
+    Object.assign(user, updates);
 
     const updatedUser = await user.save();
 
@@ -513,7 +580,8 @@ const googleLogin = asyncHandler(async (req, res) => {
     }
   } else {
     user = await User.create({
-      name: name || 'Người dùng Google',
+      // Giữ đúng quy tắc 2-50 ký tự để người dùng sửa hồ sơ được mà không phải đổi tên
+      name: normalizeName(typeof name === 'string' ? name.trim().slice(0, NAME_MAX_LENGTH) : '') || 'Người dùng Google',
       email,
       avatar: picture || '',
       googleId,
