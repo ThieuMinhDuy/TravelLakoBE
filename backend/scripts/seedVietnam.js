@@ -1,6 +1,14 @@
+// Nạp dữ liệu mẫu (6 thành phố + địa điểm + 2 tài khoản mẫu).
+// CẢNH BÁO: XÓA TOÀN BỘ người dùng, thành phố, địa điểm, chuyến đi, đánh giá, yêu thích trong database đang kết nối.
+//
+// Cách chạy (chỉ trên database local / database thử nghiệm):
+//   SEED_ADMIN_PASSWORD=... SEED_USER_PASSWORD=... npm run seed:vietnam -- --yes
+// Không chạy trên Render / database thật. Script từ chối chạy khi NODE_ENV=production (trừ khi thêm --allow-production)
+// hoặc MONGO_URI không phải localhost (trừ khi thêm --allow-remote).
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import bcrypt from 'bcryptjs';
+import validator from 'validator';
 
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,9 +19,7 @@ const __dirname = path.dirname(__filename);
 // Load env vars from backend/.env
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
-// Connect to DB
 import connectDB from '../config/db.js';
-connectDB();
 
 // Models
 import User from '../models/userModel.js';
@@ -32,8 +38,47 @@ const hashPassword = async (password) => {
   return await bcrypt.hash(password, salt);
 };
 
+/** Dừng script trước khi đụng tới database nếu thiếu xác nhận / mật khẩu mẫu */
+const checkBeforeSeeding = () => {
+  const args = process.argv.slice(2);
+  const problems = [];
+
+  if (!args.includes('--yes')) {
+    problems.push('Script này XÓA TOÀN BỘ dữ liệu. Thêm cờ --yes để xác nhận: npm run seed:vietnam -- --yes');
+  }
+  if (process.env.NODE_ENV === 'production' && !args.includes('--allow-production')) {
+    problems.push('NODE_ENV=production: từ chối chạy để tránh xóa dữ liệu thật (thêm --allow-production nếu thật sự muốn).');
+  }
+  // .env ở máy dev có thể trỏ thẳng tới database thật (Atlas) dù NODE_ENV=development
+  const uri = process.env.MONGO_URI || '';
+  const isLocal = /^mongodb:\/\/([^@/]*@)?(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/|$)/.test(uri);
+  if (!uri) {
+    problems.push('Thiếu biến môi trường MONGO_URI.');
+  } else if (!isLocal && !args.includes('--allow-remote')) {
+    problems.push('MONGO_URI không phải database trên máy (localhost): có thể là database thật. Thêm --allow-remote nếu chắc chắn đây là database thử nghiệm.');
+  }
+
+  // Mật khẩu tài khoản mẫu đọc từ biến môi trường, không ghi cứng trong code (repo công khai)
+  const strong = { minLength: 6, minLowercase: 1, minUppercase: 1, minNumbers: 1, minSymbols: 0 };
+  for (const name of ['SEED_ADMIN_PASSWORD', 'SEED_USER_PASSWORD']) {
+    const value = process.env[name];
+    if (!value) problems.push(`Thiếu biến môi trường ${name}.`);
+    else if (!validator.isStrongPassword(value, strong)) {
+      problems.push(`${name} chưa đủ mạnh (tối thiểu 6 ký tự, có chữ hoa, chữ thường và chữ số).`);
+    }
+  }
+
+  if (problems.length) {
+    console.error(`Không chạy seed:\n- ${problems.join('\n- ')}`);
+    process.exit(1);
+  }
+};
+
 const seedData = async () => {
+  checkBeforeSeeding();
   try {
+    await connectDB();
+    console.log(`Database: "${mongoose.connection.name}" trên ${mongoose.connection.host}`);
     // 1. Dọn dẹp dữ liệu cũ
     console.log('Đang dọn dẹp dữ liệu cũ...');
     await User.deleteMany();
@@ -48,8 +93,8 @@ const seedData = async () => {
     console.log('Đã dọn dẹp xong.');
 
     // 2. Tạo tài khoản mẫu
-    const hashedAdminPassword = await hashPassword('admin123');
-    const hashedUserPassword = await hashPassword('user123');
+    const hashedAdminPassword = await hashPassword(process.env.SEED_ADMIN_PASSWORD);
+    const hashedUserPassword = await hashPassword(process.env.SEED_USER_PASSWORD);
 
     const createdUsers = await User.insertMany([
       {
@@ -69,7 +114,7 @@ const seedData = async () => {
         isBlocked: false,
       },
     ]);
-    console.log('-> Tạo tài khoản Admin & Customer thành công.');
+    console.log('-> Tạo tài khoản admin@travel.com (Admin) và customer@travel.com thành công (mật khẩu lấy từ SEED_ADMIN_PASSWORD / SEED_USER_PASSWORD).');
 
     // 3. Khởi tạo 6 thành phố du lịch hàng đầu Việt Nam
     const citiesData = [
