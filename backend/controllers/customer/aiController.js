@@ -157,6 +157,7 @@ CÁC YÊU CẦU QUAN TRỌNG:
 4. Trích xuất chính xác số tiền ngân sách mà người dùng mong muốn từ lịch sử cuộc trò chuyện dưới đây. 
    - Tìm các cụm từ chỉ ngân sách (ví dụ: "ngân sách 4 triệu", "4tr", "4.000.000", "ngân sách 3 triệu"...) trong lịch sử chat để lấy giá trị số tương ứng (ví dụ: 4000000 hoặc 3000000) gán vào trường "estimatedTotalCost".
    - Nếu không tìm thấy bất kỳ thông tin ngân sách nào cụ thể trong lịch sử chat, hãy dùng giá trị mặc định là 4000000.
+5. Với Khách sạn (Hotel): chỉ đưa mỗi khách sạn vào lịch trình ĐÚNG 1 LẦN ở ngày đầu tiên nhận phòng (thường là Ngày 1), KHÔNG lặp lại cùng 1 Hotel ở các ngày sau để tránh tính trùng tiền phòng.
 
 LỊCH SỬ CUỘC TRÒ CHUYỆN ĐỂ TRÍCH XUẤT NGÂN SÁCH:
 ${conversationText}`;
@@ -172,10 +173,11 @@ DANH SÁCH ĐỊA ĐIỂM THỰC TẾ:
 ${placesListText}
 
 Quy tắc sắp xếp:
-- Ngày đầu tiên nên bắt đầu bằng việc nhận phòng khách sạn (Hotel) nếu có khách sạn được gợi ý.
+- Số đêm lưu trú được tính là max(1, ${duration} - 1) đêm (ví dụ: 2 ngày 1 đêm tính 1 đêm phòng).
+- Ngày đầu tiên nên bắt đầu bằng việc nhận phòng 1 khách sạn (Hotel) duy nhất phù hợp ngân sách, KHÔNG lặp lại cùng khách sạn đó sang các ngày tiếp theo.
 - Mỗi ngày cần gợi ý từ 6 đến 7 địa điểm hoạt động (trải đều Sáng, Trưa, Chiều, Tối gồm tham quan Attraction, ăn uống Restaurant/Cafe và Khách sạn Hotel khi phù hợp) xếp theo thứ tự thời gian hợp lý (order từ 0 tăng dần). Nếu thành phố có ít hơn 6-7 địa điểm trong danh sách thực tế thì dùng tối đa số địa điểm hiện có.
-- Đảm bảo lịch trình đáp ứng tốt nhất sở thích "${preferences || 'Tổng hợp'}" và phân khúc ngân sách "${budget || 'Trung bình'}".
-- Ước tính tổng chi phí toàn bộ chuyến đi "estimatedTotalCost" (bao gồm giá phòng khách sạn tham khảo, vé vào cửa các điểm du lịch, và chi phí ăn uống ước lượng cho ${duration} ngày).`;
+- Đảm bảo tổng chi phí toàn bộ chuyến đi (giá phòng khách sạn × số đêm + vé tham quan + ăn uống/cafe) phù hợp với sở thích "${preferences || 'Tổng hợp'}" và ngân sách "${budget || 'Trung bình'}".
+- Ước tính tổng chi phí toàn bộ chuyến đi "estimatedTotalCost" theo đúng số đêm và địa điểm đã chọn.`;
 
     userPrompt = `Hãy thiết kế lịch trình ${duration} ngày tại thành phố ${targetCity.name}.
 Sở thích: ${preferences || 'Không có yêu cầu đặc biệt'}
@@ -265,6 +267,25 @@ Lưu ý thêm từ tôi: ${notes || 'Không có lưu ý thêm'}`;
     }
 
     const resultJson = JSON.parse(aiText);
+
+    // Chống lặp cùng 1 khách sạn qua nhiều ngày gây nhân trùng tiền phòng khi FE tính theo số đêm
+    if (Array.isArray(resultJson?.schedule)) {
+      const seenHotelIds = new Set();
+      resultJson.schedule = resultJson.schedule.map((dayItem) => {
+        const filteredPlaces = (dayItem.places || []).filter((place) => {
+          if (place?.placeType !== 'Hotel') return true;
+          const id = String(place.placeId || '');
+          if (!id || seenHotelIds.has(id)) return false;
+          seenHotelIds.add(id);
+          return true;
+        });
+        return {
+          ...dayItem,
+          places: filteredPlaces.map((p, idx) => ({ ...p, order: idx })),
+        };
+      });
+    }
+
     res.status(200).json({
       success: true,
       city: {
@@ -377,7 +398,12 @@ QUY TẮC KHI LẬP LỊCH TRÌNH:
 - Khi người dùng yêu cầu lập lịch trình du lịch, bạn bắt buộc phải biết rõ 2 thông tin quan trọng: Ngân sách dự kiến và Số ngày đi (độ dài chuyến đi).
 - Nếu người dùng CHƯA cung cấp một trong hai thông tin này (Ngân sách hoặc Số ngày đi), bạn TUYỆT ĐỐI KHÔNG tự bịa ra thông tin mặc định hay lập lịch trình ngay. Thay vào đó, hãy lịch sự hỏi lại người dùng để xác nhận các thông tin còn thiếu này.
 - Chỉ khi người dùng đã cung cấp đủ cả thông tin về Ngân sách và Số ngày đi, bạn mới tiến hành gợi ý lịch trình chi tiết theo từng ngày.
-- Số lượng địa điểm mỗi ngày (BẮT BUỘC): Trong mỗi ngày của lịch trình, bạn PHẢI gợi ý từ 6 đến 7 địa điểm cụ thể từ danh sách thực tế (phân bổ hợp lý qua Sáng, Trưa, Chiều, Tối gồm khách sạn, điểm tham quan, nhà hàng và quán cafe). Nếu thành phố trong danh sách thực tế có ít hơn 6-7 địa điểm thì sử dụng tối đa số địa điểm hiện có; tuyệt đối không tự bịa địa điểm ngoài danh sách.
+- RÀNG BUỘC NGÂN SÁCH (CỰC KỲ QUAN TRỌNG):
+  • Số đêm ở khách sạn = tối đa(1, số ngày đi - 1) đêm (ví dụ: đi 2 ngày tính 1 đêm phòng, đi 3 ngày tính 2 đêm phòng).
+  • Tổng chi phí dự kiến = (Giá phòng khách sạn/đêm × Số đêm) + Tổng vé tham quan + Tổng chi phí ăn uống & cafe của tất cả các ngày.
+  • Bạn PHẢI cộng nhẩm kỹ và chỉ chọn khách sạn cùng các điểm ăn chơi có mức giá phù hợp sao cho TỔNG CHI PHÍ DỰ KIẾN ≤ NGÂN SÁCH DỰ KIẾN của người dùng (ưu tiên các điểm có giá hợp lý/miễn phí nếu ngân sách thấp). Nếu tất cả khách sạn trong dữ liệu đều khiến tổng chi phí vượt ngân sách, hãy báo rõ mức chi phí tối thiểu ước tính để người dùng xác nhận điều chỉnh.
+  • Chỉ chọn 1 khách sạn duy nhất và chỉ liệt kê khách sạn ở Ngày 1 (ngày nhận phòng), KHÔNG lặp lại tên khách sạn ở Ngày 2, Ngày 3...
+- Số lượng địa điểm mỗi ngày (BẮT BUỘC): Trong mỗi ngày của lịch trình, bạn PHẢI gợi ý từ 6 đến 7 địa điểm cụ thể từ danh sách thực tế (phân bổ hợp lý qua Sáng, Trưa, Chiều, Tối gồm điểm tham quan, nhà hàng, quán cafe và khách sạn ở Ngày 1). Nếu thành phố trong danh sách thực tế có ít hơn 6-7 địa điểm thì sử dụng tối đa số địa điểm hiện có; tuyệt đối không tự bịa địa điểm ngoài danh sách.
 - Riêng Ngày bắt đầu chuyến đi không bắt buộc người dùng phải cung cấp, bạn không cần hỏi thông tin này.
 
 QUY TẮC ĐỊNH DẠNG CÂU TRẢ LỜI (BẮT BUỘC):
